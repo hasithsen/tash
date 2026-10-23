@@ -363,7 +363,7 @@ do_control() {
 handle_key() {
   local key="$1"
   case "$key" in
-    q|Q) cleanup ;;
+    q|Q) exit 0 ;;
     ']') do_control bright-up ;;
     '[') do_control bright-down ;;
     '='|'+') do_control vol-up ;;
@@ -470,25 +470,44 @@ ${flash_line}
 EOF
 }
 
-cleanup() {
-  stty echo icanon 2>/dev/null || true
-  printf '\033[?25h'
-  echo
-  echo "${DIM}tash out. your secrets are safe. probably.${RESET}"
-  exit 0
+STTY_SAVE=""
+CLEANED=0
+
+restore_tty() {
+  (( CLEANED )) && return
+  CLEANED=1
+  if [[ -n "$STTY_SAVE" ]]; then
+    stty "$STTY_SAVE" 2>/dev/null || stty sane 2>/dev/null || true
+  else
+    stty sane 2>/dev/null || true
+  fi
+  printf '\033[?25h' 2>/dev/null || true
 }
 
-trap cleanup INT TERM
+cleanup() {
+  restore_tty
+  # Only print goodbye when we actually ran the interactive UI
+  if [[ -n "$STTY_SAVE" ]]; then
+    echo
+    echo "${DIM}tash out. your secrets are safe. probably.${RESET}"
+  fi
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 printf '\033[?25l'
 
 if [[ "$ONCE" -eq 1 ]]; then
   draw
   printf '\033[?25h'
+  CLEANED=1  # skip restore_tty noise; we never changed stty
   exit 0
 fi
 
-# raw-ish tty so single keypresses work without Enter
+# Save full tty state, then raw-ish mode for single keypresses
+STTY_SAVE="$(stty -g 2>/dev/null || true)"
 stty -echo -icanon time 0 min 0 2>/dev/null || true
 
 while true; do
@@ -503,6 +522,6 @@ while true; do
     fi
     (( CONTROLS )) && handle_key "$key"
     # immediate redraw after control
-    [[ "$key" == "q" || "$key" == "Q" ]] || continue
+    continue
   fi
 done
