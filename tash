@@ -1013,22 +1013,55 @@ EOF
 
 STTY_SAVE=""
 CLEANED=0
+ALT_SCREEN=0
+TTY_DEV="/dev/tty"
+
+# Prefer the real controlling terminal (not a redirected stdout pipe).
+if [[ ! -c "$TTY_DEV" ]] || [[ ! -r "$TTY_DEV" ]] || [[ ! -w "$TTY_DEV" ]]; then
+  if [[ -t 0 ]]; then
+    TTY_DEV="/dev/stdin"
+  else
+    TTY_DEV=""
+  fi
+fi
 
 restore_tty() {
   (( CLEANED )) && return
   CLEANED=1
-  if [[ -n "$STTY_SAVE" ]]; then
-    stty "$STTY_SAVE" 2>/dev/null || stty sane 2>/dev/null || true
-  else
-    stty sane 2>/dev/null || true
+
+  # Visual: reset attrs, show cursor, leave alt screen (restores prior display)
+  printf '\033[0m\033[?25h' 2>/dev/null || true
+  if (( ALT_SCREEN )); then
+    printf '\033[?1049l' 2>/dev/null || true
+    ALT_SCREEN=0
   fi
-  printf '\033[?25h' 2>/dev/null || true
+
+  # Line discipline: always target the tty device we changed
+  if [[ -n "$STTY_SAVE" && -n "$TTY_DEV" ]]; then
+    stty "$STTY_SAVE" <"$TTY_DEV" 2>/dev/null \
+      || stty sane <"$TTY_DEV" 2>/dev/null \
+      || stty sane 2>/dev/null \
+      || true
+  elif [[ -n "$TTY_DEV" ]]; then
+    stty sane echo icanon <"$TTY_DEV" 2>/dev/null || stty sane 2>/dev/null || true
+  else
+    stty sane echo icanon 2>/dev/null || true
+  fi
+
+  # Belt-and-braces for Debian bare consoles that ignore stty -g restore
+  if [[ -n "$TTY_DEV" ]]; then
+    stty echo icanon <"$TTY_DEV" 2>/dev/null || true
+  else
+    stty echo icanon 2>/dev/null || true
+  fi
 }
 
 cleanup() {
+  local was_interactive=0
+  [[ -n "$STTY_SAVE" ]] && was_interactive=1
   restore_tty
-  # Only print goodbye when we actually ran the interactive UI
-  if [[ -n "$STTY_SAVE" ]]; then
+  # Goodbye on the restored (primary) screen only
+  if (( was_interactive )); then
     echo
     echo "${SEC}tash out.${RESET} ${META}your secrets are safe. probably.${RESET}"
   fi
@@ -1038,27 +1071,35 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-printf '\033[?25l'
-
 if [[ "$ONCE" -eq 1 ]]; then
+  printf '\033[?25l' 2>/dev/null || true
   draw
-  printf '\033[?25h'
-  CLEANED=1  # skip restore_tty noise; we never changed stty
+  printf '\033[0m\033[?25h' 2>/dev/null || true
+  CLEANED=1
   exit 0
 fi
 
-# Save full tty state, then raw-ish mode for single keypresses
-STTY_SAVE="$(stty -g 2>/dev/null || true)"
-stty -echo -icanon time 0 min 0 2>/dev/null || true
+# Interactive: save tty, enter alt screen, raw-ish keys
+if [[ -n "$TTY_DEV" ]]; then
+  STTY_SAVE="$(stty -g <"$TTY_DEV" 2>/dev/null || true)"
+  stty -echo -icanon time 0 min 0 <"$TTY_DEV" 2>/dev/null || true
+else
+  STTY_SAVE="$(stty -g 2>/dev/null || true)"
+  stty -echo -icanon time 0 min 0 2>/dev/null || true
+fi
+
+# Alternate screen keeps the previous scrollback/prompt intact underneath
+printf '\033[?1049h\033[H\033[?25l' 2>/dev/null || true
+ALT_SCREEN=1
 
 while true; do
   draw
   # wait up to REFRESH seconds for a key; drain extra bytes from escape seqs
-  if read -r -n 1 -t "$REFRESH" key 2>/dev/null; then
+  if read -r -n 1 -t "$REFRESH" key <"${TTY_DEV:-/dev/stdin}" 2>/dev/null; then
     # skip escape sequences (arrows etc.)
     if [[ "$key" == $'\033' ]]; then
-      read -r -n 1 -t 0.01 _ || true
-      read -r -n 1 -t 0.01 _ || true
+      read -r -n 1 -t 0.01 _ <"${TTY_DEV:-/dev/stdin}" 2>/dev/null || true
+      read -r -n 1 -t 0.01 _ <"${TTY_DEV:-/dev/stdin}" 2>/dev/null || true
       continue
     fi
     (( CONTROLS )) && handle_key "$key"

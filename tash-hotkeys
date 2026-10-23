@@ -2,9 +2,11 @@
 # tash-hotkeys — grab Fn / media keys on a bare console (no DE) via evdev
 # Listens for brightness, volume, mute and calls tash-ctl.
 #
+# Dell Latitude (e.g. 5480): keys often arrive on "Dell WMI hotkeys", which can
+# appear *after* boot — we rescan devices. Use --test to see raw key codes.
+#
 # Needs read access to /dev/input/event* (group `input`, or root).
-# On Debian minimal: sudo usermod -aG input $USER  && re-login
-# Or: sudo ./contrib/debian-minimal/install.sh
+# On Debian minimal: sudo ./contrib/debian-minimal/install.sh
 
 set -euo pipefail
 
@@ -13,74 +15,22 @@ CTL="${TASH_CTL:-$SCRIPT_DIR/tash-ctl}"
 [[ -x "$CTL" ]] || CTL="$(command -v tash-ctl 2>/dev/null || true)"
 [[ -n "${CTL:-}" && -x "$CTL" ]] || { echo "tash-hotkeys: tash-ctl not found" >&2; exit 1; }
 
-# Linux input event codes (include/uapi/linux/input-event-codes.h)
-KEY_MUTE=113
-KEY_VOLUMEDOWN=114
-KEY_VOLUMEUP=115
-KEY_BRIGHTNESSDOWN=224
-KEY_BRIGHTNESSUP=225
-KEY_MICMUTE=248
-EV_KEY=1
-
-# value: 0=release 1=press 2=repeat — act on press + repeat
-should_handle() {
-  local value="$1"
-  [[ "$value" == "1" || "$value" == "2" ]]
-}
-
-handle_code() {
-  local code="$1"
-  case "$code" in
-    "$KEY_BRIGHTNESSUP")   "$CTL" brightness up >/dev/null ;;
-    "$KEY_BRIGHTNESSDOWN") "$CTL" brightness down >/dev/null ;;
-    "$KEY_VOLUMEUP")       "$CTL" volume up >/dev/null ;;
-    "$KEY_VOLUMEDOWN")     "$CTL" volume down >/dev/null ;;
-    "$KEY_MUTE"|"$KEY_MICMUTE") "$CTL" volume toggle >/dev/null ;;
-  esac
-}
-
-list_event_devices() {
-  local f name
-  shopt -s nullglob
-  for f in /dev/input/event*; do
-    # Prefer devices that look like keyboards / AT Translated Set
-    name="$(cat "/sys/class/input/$(basename "$f")/device/name" 2>/dev/null || echo unknown)"
-    echo "$f	$name"
-  done
-  shopt -u nullglob
-}
-
-# Pick devices: all event nodes the user can read (Fn keys often ride on a
-# separate "Video Bus" / "Hotkey" device, not the main keyboard).
-readable_events() {
-  local f
-  shopt -s nullglob
-  for f in /dev/input/event*; do
-    [[ -r "$f" ]] && echo "$f"
-  done
-  shopt -u nullglob
-}
-
 usage() {
   cat <<'EOF'
-tash-hotkeys — Fn / media key daemon for Debian-minimal (no desktop)
+tash-hotkeys — Fn / media key daemon for Debian-minimal (no DE)
 
 Usage:
   tash-hotkeys              Listen and dispatch brightness/volume keys
   tash-hotkeys --list       List input event devices
-  tash-hotkeys --test       Print matched key events (no actions)
+  tash-hotkeys --test       Print ALL key events (find Latitude/Dell codes)
   tash-hotkeys -h|--help
 
-Keys handled (when the firmware emits them):
-  Brightness up/down, Volume up/down, Mute, Mic mute
+Dell Latitude tip:
+  BIOS → Function Key Behavior → "Function Key" or try the other mode
+  (Fn+Esc toggles Fn-lock on many Latitudes).
+  Then: tash-hotkeys --test   and press Fn+brightness / volume
 
-Requires:
-  - tash-ctl in PATH or beside this script
-  - read access to /dev/input/event*  (group input)
-  - python3  (for binary evdev parsing)
-
-Debian minimal setup:
-  sudo ./contrib/debian-minimal/install.sh
+Requires: tash-ctl, python3, read access to /dev/input/event*
 EOF
 }
 
@@ -93,121 +43,258 @@ case "${1:-}" in
   *) echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
 esac
 
+list_event_devices() {
+  local f name
+  shopt -s nullglob
+  for f in /dev/input/event*; do
+    name="$(cat "/sys/class/input/$(basename "$f")/device/name" 2>/dev/null || echo unknown)"
+    echo "$f	$name"
+  done
+  shopt -u nullglob
+}
+
 if [[ "$MODE" == "list" ]]; then
-  echo "Readable input devices:"
+  echo "Input devices:"
   while IFS=$'\t' read -r dev name; do
     if [[ -r "$dev" ]]; then
       echo "  $dev  $name  [ok]"
     else
-      echo "  $dev  $name  [permission denied — add user to group 'input']"
+      echo "  $dev  $name  [permission denied — group 'input' or root]"
     fi
   done < <(list_event_devices)
+  echo
+  if lsmod 2>/dev/null | grep -q '^dell_wmi'; then
+    echo "Dell WMI module: loaded"
+  else
+    echo "Dell WMI module: missing — try: sudo modprobe dell_wmi"
+  fi
   exit 0
 fi
 
-mapfile -t DEVICES < <(readable_events)
-if (( ${#DEVICES[@]} == 0 )); then
-  echo "tash-hotkeys: no readable /dev/input/event* devices." >&2
-  echo "  sudo usermod -aG input $USER   # then log out/in" >&2
-  echo "  or: sudo $0" >&2
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "tash-hotkeys: python3 required (sudo apt-get install -y python3)" >&2
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "tash-hotkeys: python3 is required to read evdev events." >&2
-  echo "  sudo apt-get install -y python3" >&2
-  echo "  (or use triggerhappy — see contrib/debian-minimal/)" >&2
-  exit 1
-fi
+# Best-effort: Dell Latitude hotkeys need these modules
+modprobe dell_wmi 2>/dev/null || true
+modprobe dell_laptop 2>/dev/null || true
+modprobe intel_backlight 2>/dev/null || true
 
 export TASH_CTL_PATH="$CTL"
-export TASH_HOTKEYS_TEST="$MODE"
-export TASH_HOTKEYS_DEVICES="${DEVICES[*]}"
+export TASH_HOTKEYS_MODE="$MODE"
 
-# Multiplex all readable event devices; Fn keys often arrive on a sibling device.
-exec python3 - "$MODE" "$CTL" "${DEVICES[@]}" <<'PY'
-import os, struct, select, sys, subprocess
+exec python3 - "$MODE" "$CTL" <<'PY'
+"""Watch all /dev/input/event*; rescan when Dell WMI appears late."""
+from __future__ import annotations
+
+import glob
+import os
+import select
+import struct
+import subprocess
+import sys
+import time
 
 EV_KEY = 1
-# timeval (2x long) + type u16 + code u16 + value s32
-# On Linux: long is 8 bytes on 64-bit, 4 on 32-bit
-import platform
-long_sz = 8 if struct.calcsize("l") == 8 else 4
-fmt = f"{long_sz}s{long_sz}sHHi"
-evt_size = struct.calcsize(fmt)
+EV_SYN = 0
+EV_MSC = 4
+MSC_SCAN = 4
 
-CODES = {
-    113: "mute",
-    114: "vol-down",
-    115: "vol-up",
-    224: "bright-down",
-    225: "bright-up",
-    248: "mic-mute",
+# timeval: two native longs + type u16 + code u16 + value s32
+LONG_SZ = struct.calcsize("l")
+FMT = f"{LONG_SZ}s{LONG_SZ}sHHi"
+EVT_SIZE = struct.calcsize(FMT)
+
+# Linux input-event-codes.h — extend via TASH_EXTRA_KEYS=code:brightness:up,...
+ACTIONS = {
+    113: ("mute", ["volume", "toggle"]),
+    114: ("vol-down", ["volume", "down"]),
+    115: ("vol-up", ["volume", "up"]),
+    224: ("bright-down", ["brightness", "down"]),
+    225: ("bright-up", ["brightness", "up"]),
+    240: ("bright-min", ["brightness", "set", "1"]),
+    241: ("bright-max", ["brightness", "set", "100"]),
+    248: ("mic-mute", ["volume", "toggle"]),
 }
+
+for item in os.environ.get("TASH_EXTRA_KEYS", "").split(","):
+    item = item.strip()
+    if not item:
+        continue
+    parts = item.split(":")
+    if len(parts) < 3:
+        continue
+    try:
+        c = int(parts[0], 0)
+    except ValueError:
+        continue
+    ACTIONS[c] = (f"extra-{c}", parts[1:])
 
 mode = sys.argv[1]
 ctl = sys.argv[2]
-paths = sys.argv[3:]
 
-fds = []
-fd_to_path = {}
-for p in paths:
-    try:
-        fd = os.open(p, os.O_RDONLY | os.O_NONBLOCK)
-        fds.append(fd)
-        fd_to_path[fd] = p
-    except OSError as e:
-        print(f"tash-hotkeys: skip {p}: {e}", file=sys.stderr)
+def device_name(path: str) -> str:
+    base = os.path.basename(path)
+    for cand in (
+        f"/sys/class/input/{base}/device/name",
+        f"/sys/class/input/{base}/name",
+    ):
+        try:
+            with open(cand, encoding="utf-8", errors="replace") as f:
+                return f.read().strip()
+        except OSError:
+            continue
+    return "unknown"
 
-if not fds:
-    print("tash-hotkeys: could not open any event device", file=sys.stderr)
-    sys.exit(1)
 
-print(f"tash-hotkeys: watching {len(fds)} device(s) — Ctrl+C to stop", file=sys.stderr)
-if mode == "test":
-    print("tash-hotkeys: TEST mode — events only, no actions", file=sys.stderr)
+def list_readable() -> list[str]:
+    paths = sorted(glob.glob("/dev/input/event*"))
+    out = []
+    for p in paths:
+        if os.access(p, os.R_OK):
+            out.append(p)
+    return out
 
-def act(code):
-    name = CODES.get(code)
-    if not name:
-        return
+
+def open_devices(paths: list[str], existing: dict[int, str]) -> dict[int, str]:
+    """Return fd -> path map, keeping already-open fds."""
+    have_paths = set(existing.values())
+    for p in paths:
+        if p in have_paths:
+            continue
+        try:
+            fd = os.open(p, os.O_RDONLY | os.O_NONBLOCK)
+        except OSError as e:
+            print(f"tash-hotkeys: skip {p}: {e}", file=sys.stderr)
+            continue
+        existing[fd] = p
+        name = device_name(p)
+        print(f"tash-hotkeys: + {p}  ({name})", file=sys.stderr)
+    return existing
+
+
+def drop_stale(fdmap: dict[int, str]) -> dict[int, str]:
+    alive = set(list_readable())
+    gone = [fd for fd, p in fdmap.items() if p not in alive]
+    for fd in gone:
+        p = fdmap.pop(fd)
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        print(f"tash-hotkeys: - {p}", file=sys.stderr)
+    return fdmap
+
+
+def act(code: int, dev: str, value: int) -> None:
+    info = ACTIONS.get(code)
+    name = device_name(dev)
     if mode == "test":
-        print(f"event {name} (code={code})", flush=True)
+        label = info[0] if info else "other"
+        print(
+            f"key code={code} value={value} action={label}  via {dev} ({name})",
+            flush=True,
+        )
         return
-    cmd = {
-        "bright-up":   [ctl, "brightness", "up"],
-        "bright-down": [ctl, "brightness", "down"],
-        "vol-up":      [ctl, "volume", "up"],
-        "vol-down":    [ctl, "volume", "down"],
-        "mute":        [ctl, "volume", "toggle"],
-        "mic-mute":    [ctl, "volume", "toggle"],
-    }[name]
+    if not info:
+        return
+    _, argv = info
     try:
-        subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            [ctl, *argv],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception as e:
         print(f"tash-hotkeys: action failed: {e}", file=sys.stderr)
 
-buf = {fd: b"" for fd in fds}
+
+fdmap: dict[int, str] = {}
+buf: dict[int, bytes] = {}
+last_scan = 0.0
+SCAN_EVERY = 2.0
+
+fdmap = open_devices(list_readable(), fdmap)
+if not fdmap:
+    print("tash-hotkeys: no readable /dev/input/event* devices.", file=sys.stderr)
+    print("  sudo usermod -aG input $USER  # re-login", file=sys.stderr)
+    print("  or: sudo tash-hotkeys", file=sys.stderr)
+    sys.exit(1)
+
+print(f"tash-hotkeys: watching {len(fdmap)} device(s) — Ctrl+C to stop", file=sys.stderr)
+if mode == "test":
+    print(
+        "tash-hotkeys: TEST — press Fn+brightness / volume; "
+        "ALL key codes print (even unknown)",
+        file=sys.stderr,
+    )
+    print(
+        "tash-hotkeys: on Latitude, prefer the 'Dell WMI hotkeys' line",
+        file=sys.stderr,
+    )
+
+for fd in fdmap:
+    buf[fd] = b""
 
 try:
     while True:
-        r, _, _ = select.select(fds, [], [])
+        now = time.monotonic()
+        if now - last_scan >= SCAN_EVERY:
+            last_scan = now
+            fdmap = drop_stale(fdmap)
+            before = set(fdmap)
+            fdmap = open_devices(list_readable(), fdmap)
+            for fd in fdmap:
+                if fd not in before:
+                    buf[fd] = b""
+
+        if not fdmap:
+            time.sleep(SCAN_EVERY)
+            continue
+
+        timeout = SCAN_EVERY
+        r, _, _ = select.select(list(fdmap.keys()), [], [], timeout)
         for fd in r:
+            path = fdmap.get(fd)
+            if path is None:
+                continue
             try:
-                chunk = os.read(fd, evt_size * 32)
+                chunk = os.read(fd, EVT_SIZE * 64)
             except BlockingIOError:
+                continue
+            except OSError:
+                # device yanked
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                fdmap.pop(fd, None)
+                buf.pop(fd, None)
                 continue
             if not chunk:
                 continue
-            buf[fd] += chunk
-            while len(buf[fd]) >= evt_size:
-                raw, buf[fd] = buf[fd][:evt_size], buf[fd][evt_size:]
-                _, _, etype, code, value = struct.unpack(fmt, raw)
-                if etype == EV_KEY and value in (1, 2) and code in CODES:
-                    act(code)
+            buf[fd] = buf.get(fd, b"") + chunk
+            while len(buf[fd]) >= EVT_SIZE:
+                raw, buf[fd] = buf[fd][:EVT_SIZE], buf[fd][EVT_SIZE:]
+                try:
+                    _, _, etype, code, value = struct.unpack(FMT, raw)
+                except struct.error:
+                    buf[fd] = b""
+                    break
+                if etype != EV_KEY:
+                    continue
+                if value not in (1, 2):  # press + repeat
+                    continue
+                if mode == "test" or code in ACTIONS:
+                    act(code, path, value)
 except KeyboardInterrupt:
     print("\ntash-hotkeys: bye", file=sys.stderr)
 finally:
-    for fd in fds:
-        os.close(fd)
+    for fd in list(fdmap):
+        try:
+            os.close(fd)
+        except OSError:
+            pass
 PY

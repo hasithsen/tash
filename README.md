@@ -63,21 +63,29 @@ chmod +x tash tash-ctl tash-hotkeys
 
 ### Fn keys on Debian minimal (no desktop)
 
-Without a desktop, media keys only appear as events on `/dev/input/event*`. Something has to listen — that is `tash-hotkeys`:
+Without a desktop, media keys arrive on `/dev/input/event*` (on Dell Latitude, often **Dell WMI hotkeys**). `tash-hotkeys` listens and calls `tash-ctl`.
 
 ```bash
 sudo ./contrib/debian-minimal/install.sh
-# log out and back in (groups: video, input, audio)
+# log out / back in (or reboot)
 ```
 
-This installs the tools, `alsa-utils`, `python3`, a backlight udev rule, group membership, and `tash-hotkeys.service`.
+That path loads `dell_wmi`, stops logind from swallowing brightness keys, installs udev rules, and runs `tash-hotkeys.service` as root (so late WMI devices are still readable).
 
 ```bash
-tash-ctl brightness up
-tash-hotkeys --test
+tash-ctl brightness up            # backlight path OK?
+sudo tash-hotkeys --list          # look for Dell WMI hotkeys
+sudo tash-hotkeys --test          # press Fn brightness / volume
 ```
 
-If `--test` shows nothing, use `sudo evtest` to find which device fires.
+**Dell Latitude 5480:** In BIOS, try **Function Key Behavior** (Function Key vs Multimedia Key), or toggle Fn-lock with **Fn+Esc**. If `--test` prints an unknown `code=N`, map it:
+
+```bash
+sudo systemctl edit tash-hotkeys
+# [Service]
+# Environment=TASH_EXTRA_KEYS=N:brightness:up,M:brightness:down
+sudo systemctl restart tash-hotkeys
+```
 
 ## `tash-ctl`
 
