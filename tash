@@ -366,6 +366,7 @@ wifi_iface() {
 
 # prints: state ssid signal_pct
 # state = up|down|n/a
+# ssid may be "unknown" when associated but tools can't read the name
 get_wifi() {
   if [[ "$OS" == "darwin" ]]; then
     local ssid sig
@@ -387,7 +388,7 @@ get_wifi() {
     return
   fi
 
-  local iface state="down" ssid="none" signal="n/a" qual
+  local iface state="down" ssid="" signal="n/a" qual carrier ipaddr link
 
   iface="$(wifi_iface)"
   if [[ -z "$iface" ]]; then
@@ -396,22 +397,61 @@ get_wifi() {
   fi
 
   if [[ -r "/sys/class/net/$iface/operstate" ]]; then
-    state="$(cat "/sys/class/net/$iface/operstate")"
-    [[ "$state" == "up" ]] || state="down"
+    state="$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo down)"
   fi
+  carrier="$(cat "/sys/class/net/$iface/carrier" 2>/dev/null || echo 0)"
 
-  # SSID
+  # Associated / has L3 even when operstate is quirky (common on bare installs)
+  if [[ "$state" != "up" ]]; then
+    if [[ "$carrier" == "1" ]]; then
+      state="up"
+    elif command -v ip >/dev/null 2>&1; then
+      ipaddr="$(ip -4 -o addr show dev "$iface" 2>/dev/null | awk '{print $4}' | head -1)"
+      [[ -n "$ipaddr" ]] && state="up"
+    fi
+  fi
+  [[ "$state" == "up" ]] || state="down"
+
+  # SSID — try whatever is installed (Debian minimal often has none of these)
   if command -v iwgetid >/dev/null 2>&1; then
     ssid="$(iwgetid -r "$iface" 2>/dev/null || true)"
   fi
   if [[ -z "$ssid" ]] && command -v iw >/dev/null 2>&1; then
-    ssid="$(iw dev "$iface" link 2>/dev/null | awk -F': ' '/SSID/{print $2; exit}')"
+    link="$(iw dev "$iface" link 2>/dev/null || true)"
+    if [[ "$link" != *"Not connected"* ]]; then
+      ssid="$(printf '%s\n' "$link" | awk -F': ' '/SSID/{print $2; exit}')"
+      # iw link succeeding means associated even without SSID line
+      if [[ -n "$link" && "$state" != "up" ]]; then
+        state="up"
+      fi
+    fi
   fi
   if [[ -z "$ssid" ]] && command -v nmcli >/dev/null 2>&1; then
     ssid="$(nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
   fi
-  ssid="${ssid:-none}"
-  ssid="${ssid// /_}"
+  if [[ -z "$ssid" ]] && command -v wpa_cli >/dev/null 2>&1; then
+    ssid="$(wpa_cli -i "$iface" status 2>/dev/null | awk -F= '/^ssid=/{print $2; exit}')"
+    if [[ -z "$ssid" ]]; then
+      # wpa_state=COMPLETED ⇒ associated
+      if wpa_cli -i "$iface" status 2>/dev/null | grep -q '^wpa_state=COMPLETED'; then
+        state="up"
+      fi
+    fi
+  fi
+  if [[ -z "$ssid" ]] && command -v iwctl >/dev/null 2>&1; then
+    ssid="$(iwctl station "$iface" show 2>/dev/null \
+      | sed -n 's/.*Connected network[[:space:]]*//p' | head -1 | tr -d '\r')"
+  fi
+
+  if [[ -n "$ssid" ]]; then
+    state="up"
+    ssid="${ssid// /_}"
+  elif [[ "$state" == "up" ]]; then
+    # Connected but no wireless-tools/iw/nmcli — don't lie and say disconnected
+    ssid="unknown"
+  else
+    ssid="none"
+  fi
 
   # Signal %
   if command -v iw >/dev/null 2>&1; then
@@ -430,10 +470,6 @@ get_wifi() {
   if [[ "$signal" == "n/a" ]] && command -v nmcli >/dev/null 2>&1; then
     signal="$(nmcli -t -f ACTIVE,SIGNAL dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
     signal="${signal:-n/a}"
-  fi
-
-  if [[ "$ssid" != "none" && "$state" != "up" ]]; then
-    state="up"
   fi
 
   echo "$state $ssid $signal"
@@ -592,18 +628,21 @@ format_wifi_line() {
     echo "${D}no wifi interface${RESET}"
     return
   fi
-  if [[ "$state" != "up" || "$ssid" == "none" ]]; then
+  if [[ "$state" != "up" ]]; then
     echo "${R}disconnected${RESET}  ${D}(lonely packets)${RESET}"
     return
   fi
-  local pretty="${ssid//_/ }"
-  local sigbit=""
+  local pretty sigbit=""
+  case "$ssid" in
+    none|unknown|"") pretty="${D}(ssid unknown — apt install iw)${RESET}" ;;
+    *) pretty="${BOLD}${ssid//_/ }${RESET}" ;;
+  esac
   if [[ "$signal" =~ ^[0-9]+$ ]]; then
     sigbit="$(bar "$signal" 16)  ${signal}%"
   else
     sigbit="${D}signal n/a${RESET}"
   fi
-  echo "${G}connected${RESET}  ${BOLD}${pretty}${RESET}  $sigbit"
+  echo "${G}connected${RESET}  $pretty  $sigbit"
 }
 
 format_eth_line() {
