@@ -16,13 +16,38 @@
      ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 ```
 
+## A short history of how you got awesome
+
+Once upon a tty, there was a laptop.
+
+It was a proud Debian minimal laptop. No wallpaper. No widgets. No little battery icon doing interpretive dance in the corner. Just a blinking cursor and the fan doing a TED Talk about heat.
+
+Its human — that’s you — had installed the OS “for focus.” Focus, it turned out, felt a lot like staring into the void while the void compiled `node_modules`.
+
+You mashed Fn+brightness. Nothing.  
+You mashed Fn+volume. Still nothing.  
+You whispered *please* to `/sys`. `/sys` did not whisper back.
+
+So you did what any reasonable person does at 1:14 a.m.: you opened twelve terminals, ran `top`, `htop`, `free -h`, `df -h`, `ip a`, and a Stack Overflow tab that began with “as of 2017…” You still didn’t know if the Wi‑Fi was up or if the laptop was simply vibing in airplane mode out of spite.
+
+Then someone (a stranger, a friend, a raccoon with root — accounts differ) said: try `tash`.
+
+You typed `./tash`.
+
+The screen cleared. A teal wordmark arrived like it paid rent. Bars drew themselves. The mood said *mildly concerned*. You closed one Electron app — you knew which traitor — and the mood flipped to *vibing*. Battery: **81%** · **2h 14m left**. Wi‑Fi: actually connected. Fn keys, after `tash-hotkeys`, finally clocked in like employees who had been on lunch since 2019.
+
+You sat back.
+
+You were not richer. You were not taller.  
+You were **awesome**.
+
+The laptop hummed, slightly less judgmental.  
+The cursor blinked, proudly.  
+And somewhere, a person still double-clicking Task Manager felt a sudden urge to learn bash and could not explain why.
+
 ## Using `tash` makes you awesome
 
-Your fans are screaming. You don’t know if it’s Chrome, compile job, or divine judgment.  
-You run `./tash`. Teal lands. Bars appear. Mood: *mildly concerned*.  
-You close one Electron app. Mood: *vibing*. Battery says **2h 14m left**.  
-
-Congratulations: you are now awesome. There is no appeals process.
+That story is also the product description. We checked.
 
 `tash` is a live system HUD — what your laptop would mutter if `free -h` had charisma and a sense of timing.
 
