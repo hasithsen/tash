@@ -3,9 +3,9 @@
 **T**erminal **A**wesome **S**ystem **H**UD
 
 > Using `tash` makes you awesome.  
-> Not louder. Not busier. Simply… clearer.  
-> The kind of clear that looks, from across a café, like you know what you’re doing.  
-> (You typed `./tash`. That’s the whole trick. We named it helpfully.)
+> Not louder. Not busier. Simply clearer — the sort of clear that looks, from the next table, like poise.  
+> The method is undignified in its honesty: you type `./tash`.  
+> We put it in the name so destiny wouldn’t have to shout.
 
 ```
   ████████╗ █████╗ ███████╗██╗  ██╗
@@ -20,43 +20,43 @@
 
 You bought a laptop and removed the desktop “for purity.”
 
-What remained was Debian minimal: a cursor, a fan with strong opinions, and the spiritual emptiness where the battery icon used to live. You told friends you were “closer to the metal.” The metal did not text back.
+What remained was Debian minimal: one cursor, one fan with a singing career, and a small ache where the battery icon used to smile. You told people you were “closer to the metal.” The metal, for its part, maintained a dignified silence.
 
-At 1:14 a.m. the fans rose to a pitch normally reserved for takeoff. Was it Chrome? A compile? God? You pressed Fn+brightness. The universe filed your request under *decorative*. You pressed Fn+volume. The speakers continued their career as modern art — present, silent, expensive-looking.
+Late one night the fans climbed toward takeoff. Chrome? A compile? Divine intervention with a sense of humor? You pressed Fn+brightness. Nothing happened, which felt personal. You pressed Fn+volume. The speakers stayed modern art — handsome, quiet, committed to the bit.
 
-So you opened terminals the way some people open snacks. `top`. `htop`. `free -h`. `df -h`. `ip a`. A wiki page last edited during the Obama administration that began “simply…” You still could not tell if Wi‑Fi was connected or merely *thinking* about connecting, which is worse.
+So you opened terminals the way kinder people open biscuits. `top`. `htop`. `free -h`. `ip a`. A tutorial that began with the dangerous word “simply” and had last been loved by the internet in another decade. You still could not tell if the Wi‑Fi was connected or merely rehearsing the idea of connection.
 
-A voice (friend / stranger / raccoon with `sudo` — eyewitnesses disagree) said: run `tash`.
+Then a voice — friend, stranger, or raccoon with suspiciously good `sudo` form — suggested, as if it were obvious: try `tash`.
 
-You typed `./tash` the way people type passwords when the barista is watching.
+You typed `./tash` carefully, the way one types when the room might be watching.
 
-The screen cleared like it had been waiting for an excuse. Teal. Bars. Mood: *mildly concerned*. You closed the Electron app you’d been calling “research.” Mood: *vibing*. Battery: **81%** · **2h 14m left**. Wi‑Fi: yes, actually. Later you installed `tash-hotkeys`, and the Fn row returned from lunch — a lunch that had, to be fair, started in 2019 when GNOME left the building.
+The screen cleared with the relief of a tablecloth snapped straight. Teal settled in. Bars drew themselves as if they’d been practicing. Mood: *mildly concerned*. You closed the Electron window you’d been calling “just one more tab.” Mood: *vibing*. Battery: **81%** · **2h 14m left**. Wi‑Fi: yes — actually yes. And when `tash-hotkeys` arrived, the Fn row came home from a very long lunch, the kind that began when the desktop packed its bags.
 
 You sat back.
 
-You had not learned French. You had not fixed your sleep. You had not become a better person in any way HR would recognize.  
-You had become **awesome**: the rare state of knowing how your laptop is doing *and* being able to dim it without leaving the plot.
+You had not learned French. You had not fixed your sleep. You had not become wise in any way a résumé would notice.  
+You had become **awesome**: that soft, ridiculous clarity of knowing how your laptop is doing — and dimming it without leaving the story.
 
-The fan took a breath. The cursor blinked, smug.  
-Somewhere, a Task Manager double-click missed its mark, and its human felt mysteriously behind.
+The fan found a lower note. The cursor blinked, almost fond.  
+Somewhere, a Task Manager click went astray, and its human smiled for no reason they could name.
 
 ## What `tash` is
 
-A live system HUD: the conversation your laptop would have if `free -h` had better manners and a sense of timing.
+A live system HUD: the conversation your laptop would have if `free -h` had better manners and arrived on time for tea.
 
-Using it makes you awesome. That is not a slogan so much as a side effect.
+Using it makes you awesome. Less a slogan than a gentle side effect — like standing up straighter after the room is finally tidy.
 
-You get, at a glance:
+At a glance you receive:
 
-- **Mood** — a short verdict on the night (`living its best life` → `panicking quietly`)
-- **Battery** — percentage *and* time left, or time to full
-- **Clock, Wi‑Fi, ethernet, online/offline** — one composition, no scavenger hunt
-- **CPU, memory, swap, disk** — bars that warm from calm to “perhaps close a tab”
-- **Brightness and volume** in the HUD; on a bare Debian laptop, real **Fn keys** via `tash-hotkeys`
+- **Mood** — a courteous verdict on the evening (`living its best life` → `panicking quietly`)
+- **Battery** — the percentage *and* how long the plot still has (`2h 14m left`, or time to full)
+- **Clock, Wi‑Fi, ethernet, online/offline** — one composition; no scavenger hunt in the sock drawer of `/proc`
+- **CPU, memory, swap, disk** — bars that warm from calm to “perhaps that tab has had enough”
+- **Brightness and volume** from the HUD; on a bare Debian laptop, real **Fn keys** once `tash-hotkeys` sets the table
 
 Friends reboot “just to see.”  
-You refresh.  
-Same machine. Different posture.
+You refresh, like someone who trusts the instruments and also owns a kettle.  
+Same laptop. Softly different posture.
 
 ## Quick start
 
@@ -65,44 +65,45 @@ chmod +x tash tash-ctl tash-hotkeys
 ./tash
 ```
 
-The cursor yields. The wordmark arrives. Awesome begins on the next line.
+The cursor yields. The wordmark arrives. Awesome begins with alarming politeness.
 
-| Command | Meaning |
-|---------|---------|
-| `./tash` | Live HUD |
-| `./tash --once` | A single frame — keep it if it’s art |
-| `tash-ctl status` | Brightness and volume, quietly |
-| `tash-ctl brightness up` | A little more light |
-| `tash-ctl volume down` | A little more peace |
-| `tash-hotkeys` | Fn keys, restored to usefulness |
+| Command | What unfolds |
+|---------|----------------|
+| `./tash` | The live HUD — full series, no ads |
+| `./tash --once` | One frame; suitable for framing if the mood is kind |
+| `tash-ctl status` | Brightness and volume, spoken softly |
+| `tash-ctl brightness up` | A little more light, please |
+| `tash-ctl volume down` | A little more peace for the neighbors |
+| `tash-hotkeys` | The Fn row, invited back to the party |
 
 ## Keyboard controls
 
 ### Inside `tash`
 
-| Key | Action |
-|-----|--------|
-| `[` `]` | Brightness down / up |
-| `-` `=` | Volume down / up |
-| `m` | Mute |
-| `q` | Quit (awesome persists) |
+| Key | Action | In the room |
+|-----|--------|-------------|
+| `[` `]` | Brightness down / up | Adjust the lamp, not the soul |
+| `-` `=` | Volume down / up | Conduct the beep orchestra, gently |
+| `m` | Mute | Sudden, elegant silence |
+| `q` | Quit | Leave; remain awesome in the corridor |
 
 ### Fn keys on Debian minimal (no desktop)
 
-Laptop Fn keys do not invent a desktop for you. Without one, they arrive as input events on `/dev/input/event*` and wait for someone civilised to listen.
+Laptop Fn keys do not conjure a desktop out of longing. Without one, they arrive as shy events on `/dev/input/event*` and wait for someone civilised to take their coats.
 
-That someone is `tash-hotkeys` (or triggerhappy):
+That someone is `tash-hotkeys` (or triggerhappy) — how the backlight finds its way home:
 
 ```bash
 sudo ./contrib/debian-minimal/install.sh
 # log out / back in (groups: video, input, audio)
+# return as someone the Fn row is pleased to see
 ```
 
-The installer:
+What the installer does (the unglamorous kindness):
 
-1. Places `tash`, `tash-ctl`, `tash-hotkeys` in `/usr/local/bin`
+1. Places `tash`, `tash-ctl`, and `tash-hotkeys` in `/usr/local/bin`
 2. Installs `alsa-utils` and `python3`
-3. Adds a **udev rule** so group `video` can write backlight brightness
+3. Adds a **udev rule** so group `video` may write backlight brightness
 4. Adds you to `video`, `input`, and `audio`
 5. Enables `tash-hotkeys.service` on the raw TTY
 
@@ -115,7 +116,7 @@ sudo tash-hotkeys --list
 tash-hotkeys --test
 ```
 
-If `--test` stays silent, the firmware is being coy — `sudo evtest` will show which device still remembers how to flinch. Awesome people look. Then they fix it.
+If `--test` stays silent, the firmware is being coy. `sudo evtest` will show which device still remembers how to flinch. Awesome people look. Then they fix it — with tea, if available.
 
 ## Manual controls (`tash-ctl`)
 
@@ -125,10 +126,12 @@ tash-ctl volume     get|up|down|set 30|mute|unmute|toggle
 tash-ctl status
 ```
 
-Backends, in order: **PipeWire** → **PulseAudio** → **ALSA**.  
-First to answer keeps the beeps.
+Backends, in polite order: **PipeWire** → **PulseAudio** → **ALSA**.  
+First to answer keeps custody of the beeps and a fond footnote in your evening.
 
 ## Debian minimal cheat sheet
+
+For those who prefer to set the table themselves:
 
 ```bash
 sudo apt-get install -y alsa-utils python3
@@ -138,7 +141,7 @@ sudo cp contrib/debian-minimal/99-tash-backlight.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger -s backlight
 ```
 
-Prefer no Python? `triggerhappy` walks the same path:
+Prefer no Python? `triggerhappy` walks the same garden path:
 
 ```bash
 sudo apt-get install -y triggerhappy
@@ -149,63 +152,64 @@ sudo systemctl enable --now triggerhappy
 
 ## Requirements
 
-- `bash`
-- Linux for brightness and Fn keys (macOS still gets the HUD; backlight hotkeys remain a Linux chapter)
-- A terminal — style chooses itself so elegance survives rough hardware:
-  - **rich** — soft 256-color, calm chrome, `█` / `░` bars
-  - **minimal** — Debian tty / `TERM=linux`: bold 16-color, no vanishing gray
-  - **ascii** — `#` / `-` when Unicode is away
+- `bash` — loyal, lightly judgmental, excellent with bars
+- Linux for brightness and Fn keys (macOS still receives the HUD; backlight hotkeys remain a Linux subplot with good lighting)
+- A terminal — style chooses itself so elegance survives rough evenings:
+  - **rich** — soft 256-color, calm chrome, `█` / `░` bars practicing their scales
+  - **minimal** — Debian tty / `TERM=linux`: bold 16-color, no vanishing gray, bars with posture
+  - **ascii** — `#` / `-` when Unicode is away on holiday
 - Override with `TASH_STYLE=rich|minimal|ascii` or `TASH_BASIC_COLOR=1`
 - Fn keys: access to `/dev/input/event*` plus `python3` (or triggerhappy)
 
 ### Hard to read on the console?
 
-Bright-black on a VGA console fades into the night.  
-`tash` notices `TERM=linux` and switches to **minimal** — clear labels, honest bars, still teal enough to mean it:
+Bright-black on a VGA console fades into the curtains.  
+`tash` notices `TERM=linux` and slips into **minimal** — clear labels, honest bars, still teal enough to mean it:
 
 ```bash
-TASH_STYLE=minimal ./tash
-TASH_STYLE=ascii ./tash
+TASH_STYLE=minimal ./tash   # legibility, with feeling
+TASH_STYLE=ascii ./tash     # the same evening, in hash marks
 ```
 
 ## Mood guide
 
-| Mood | Meaning | You |
-|------|---------|-----|
-| living its best life | The laptop is unbothered | Screenshot. Rare weather. |
-| vibing | Ordinary weather | A small nod. No speech. |
-| mildly concerned | Something is warm | Close the obvious tab. |
-| panicking quietly | Something is loud | Tabs down. RAM up. Air, optional. |
+| Mood | Meaning | A sensible response |
+|------|---------|---------------------|
+| living its best life | The laptop is unbothered | Screenshot. Rare weather. Frame optional, taste recommended. |
+| vibing | Ordinary weather | A small nod. No speech required. |
+| mildly concerned | Something is warm | Close the obvious tab. You already know which. |
+| panicking quietly | Something is loud | Tabs down. RAM up. Fresh air, if the evening allows. |
 
 ## FAQ
 
 **Does using `tash` make you awesome?**  
-Yes. Next question is optional.
+Yes.  
+The follow-up question may wait until after the mood line.
 
 **I feel the same.**  
-Read the mood line. If it says *vibing*, that feeling finally has a name.
+Glance at `mood`. If it says *vibing*, that feeling has simply acquired a name — and excellent kerning.
 
 **Why don’t Fn keys work inside `tash` alone?**  
-They never arrive on stdin. They wait on evdev. `tash-hotkeys` opens the door.
+They never arrive on stdin; they wait in the lobby on evdev. `tash-hotkeys` holds the door and takes their coats.
 
 **Brightness: permission denied**  
-Group `video`, or udev. Re-run the installer; log in again. Awesome is partly narrative, mostly permissions.
+Group `video`, or udev has not yet heard the news. Re-run the installer; log in again. Awesome is partly narrative, mostly permissions — a classic pairing.
 
 **Volume does nothing**  
-`sudo apt-get install -y alsa-utils`, then `alsamixer`. HDMI-only laptops will smile while betraying you.
+`sudo apt-get install -y alsa-utils`, then make kind eye contact with `alsamixer`. HDMI-only laptops will smile while changing the subject.
 
 **Better than `htop`?**  
-Different instruments. `htop` counts. `tash` composes — backlight, battery life, a little judgment, and the side effect called awesome.
+Different instruments in the same house. `htop` counts the guests. `tash` dims the lamps, checks the battery’s remaining evening, and leaves you quietly awesome on the sofa.
 
 **Rice screenshot?**  
-Yes. Credit the teal. It has taste and a long memory.
+Please do. Credit the teal. It has taste, patience, and a surprisingly long memory for kindness.
 
 ## License
 
-MIT — use it kindly.  
-If the mood says *panicking quietly* and you still feel awesome, the HUD is doing its job.
+MIT — use it kindly, share it freely.  
+If the mood says *panicking quietly* and you still feel awesome, the HUD is doing exactly what it came for.
 
 ---
 
 *Made for terminals. Judged by machines.*  
-*Awesome, quietly, after `./tash`.*
+*Awesome, quietly, after `./tash` — biscuits optional, teal mandatory.*
