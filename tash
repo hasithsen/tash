@@ -308,6 +308,189 @@ get_ip() {
   fi
 }
 
+# prints: pct status   status = Charging|Discharging|Full|Unknown|n/a
+get_battery() {
+  if [[ "$OS" == "darwin" ]]; then
+    local line pct status="Unknown"
+    line="$(pmset -g batt 2>/dev/null | grep -E '[0-9]+%')" || { echo "n/a n/a"; return; }
+    pct="$(grep -oE '[0-9]+%' <<<"$line" | head -1 | tr -d '%')"
+    grep -qi charging <<<"$line" && status="Charging"
+    grep -qi discharging <<<"$line" && status="Discharging"
+    grep -qi charged <<<"$line" && status="Full"
+    echo "${pct:-0} $status"
+    return
+  fi
+  local bat cap status
+  shopt -s nullglob
+  for bat in /sys/class/power_supply/BAT* /sys/class/power_supply/bat*; do
+    [[ -r "$bat/capacity" ]] || continue
+    cap="$(cat "$bat/capacity")"
+    status="$(cat "$bat/status" 2>/dev/null || echo Unknown)"
+    shopt -u nullglob
+    echo "$cap $status"
+    return
+  done
+  shopt -u nullglob
+  echo "n/a n/a"
+}
+
+# AC power connected? 1/0/n/a
+get_ac_online() {
+  local d
+  shopt -s nullglob
+  for d in /sys/class/power_supply/A{C,DP}* /sys/class/power_supply/ACAD*; do
+    if [[ -r "$d/online" ]]; then
+      cat "$d/online"
+      shopt -u nullglob
+      return
+    fi
+  done
+  shopt -u nullglob
+  echo "n/a"
+}
+
+# Find a wireless interface name (wlan0, wlp…, etc.)
+wifi_iface() {
+  local iface
+  if [[ -d /sys/class/net ]]; then
+    for iface in /sys/class/net/*; do
+      [[ -d "$iface/wireless" || -L "$iface/phy80211" ]] || continue
+      basename "$iface"
+      return
+    done
+  fi
+  if command -v iw >/dev/null 2>&1; then
+    iw dev 2>/dev/null | awk '/Interface/{print $2; exit}'
+  fi
+}
+
+# prints: state ssid signal_pct
+# state = up|down|n/a
+get_wifi() {
+  if [[ "$OS" == "darwin" ]]; then
+    local ssid sig
+    ssid="$(networksetup -getairportnetwork en0 2>/dev/null | sed 's/.*: //')"
+    if [[ -z "$ssid" || "$ssid" == *"not associated"* ]]; then
+      echo "down none n/a"
+    else
+      sig="$(airport -I 2>/dev/null | awk '/agrCtlRSSI/{print $2}')"
+      # RSSI is negative; rough map -30..-90 → 100..0
+      if [[ "$sig" =~ ^-?[0-9]+$ ]]; then
+        sig=$(( (sig + 90) * 100 / 60 ))
+        (( sig < 0 )) && sig=0
+        (( sig > 100 )) && sig=100
+      else
+        sig="n/a"
+      fi
+      echo "up ${ssid// /_} $sig"
+    fi
+    return
+  fi
+
+  local iface state="down" ssid="none" signal="n/a" qual
+
+  iface="$(wifi_iface)"
+  if [[ -z "$iface" ]]; then
+    echo "n/a none n/a"
+    return
+  fi
+
+  if [[ -r "/sys/class/net/$iface/operstate" ]]; then
+    state="$(cat "/sys/class/net/$iface/operstate")"
+    [[ "$state" == "up" ]] || state="down"
+  fi
+
+  # SSID
+  if command -v iwgetid >/dev/null 2>&1; then
+    ssid="$(iwgetid -r "$iface" 2>/dev/null || true)"
+  fi
+  if [[ -z "$ssid" ]] && command -v iw >/dev/null 2>&1; then
+    ssid="$(iw dev "$iface" link 2>/dev/null | awk -F': ' '/SSID/{print $2; exit}')"
+  fi
+  if [[ -z "$ssid" ]] && command -v nmcli >/dev/null 2>&1; then
+    ssid="$(nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
+  fi
+  ssid="${ssid:-none}"
+  ssid="${ssid// /_}"
+
+  # Signal %
+  if command -v iw >/dev/null 2>&1; then
+    qual="$(iw dev "$iface" link 2>/dev/null | awk '/signal:/{print $2; exit}')"
+    if [[ "$qual" =~ ^-?[0-9]+$ ]]; then
+      # dBm → rough percent
+      signal=$(( (qual + 90) * 100 / 60 ))
+      (( signal < 0 )) && signal=0
+      (( signal > 100 )) && signal=100
+    fi
+  fi
+  if [[ "$signal" == "n/a" ]] && [[ -r /proc/net/wireless ]]; then
+    signal="$(awk -v ifc="$iface" '$1 ~ ifc":"{ gsub(/\./,"",$3); printf "%d", $3 }' /proc/net/wireless)"
+    [[ -z "$signal" ]] && signal="n/a"
+  fi
+  if [[ "$signal" == "n/a" ]] && command -v nmcli >/dev/null 2>&1; then
+    signal="$(nmcli -t -f ACTIVE,SIGNAL dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
+    signal="${signal:-n/a}"
+  fi
+
+  if [[ "$ssid" != "none" && "$state" != "up" ]]; then
+    state="up"
+  fi
+
+  echo "$state $ssid $signal"
+}
+
+# prints: state iface ip   state = up|down|n/a
+get_ethernet() {
+  local iface state ipaddr
+  if [[ ! -d /sys/class/net ]]; then
+    echo "n/a none n/a"
+    return
+  fi
+  shopt -s nullglob
+  for iface in /sys/class/net/e* /sys/class/net/en*; do
+    [[ -e "$iface" ]] || continue
+    [[ -d "$iface/wireless" || -L "$iface/phy80211" ]] && continue
+    local name
+    name="$(basename "$iface")"
+    [[ "$name" == "lo" ]] && continue
+    state="$(cat "$iface/operstate" 2>/dev/null || echo down)"
+    ipaddr="n/a"
+    if command -v ip >/dev/null 2>&1; then
+      ipaddr="$(ip -4 -o addr show dev "$name" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
+      ipaddr="${ipaddr:-n/a}"
+    fi
+    shopt -u nullglob
+    echo "$state $name $ipaddr"
+    return
+  done
+  shopt -u nullglob
+  echo "n/a none n/a"
+}
+
+# Gateway reachability without blocking long: use carrier + default route
+# prints: online|offline|unknown
+get_connectivity() {
+  if command -v nmcli >/dev/null 2>&1; then
+    case "$(nmcli -t networking connectivity 2>/dev/null || true)" in
+      full|limited|portal) echo online; return ;;
+      none) echo offline; return ;;
+    esac
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    if ip route show default 2>/dev/null | grep -q .; then
+      echo online
+    else
+      echo offline
+    fi
+    return
+  fi
+  echo unknown
+}
+
+get_timezone() {
+  date +%Z 2>/dev/null || echo local
+}
+
 ctl_ok() { [[ -x "$CTL" ]]; }
 
 get_brightness_pct() {
@@ -372,10 +555,77 @@ handle_key() {
   esac
 }
 
+format_battery_line() {
+  local pct="$1" status="$2" ac="$3"
+  local label barbit plug=""
+  if [[ "$pct" == "n/a" ]]; then
+    echo "${D}no battery (desktop energy)${RESET}"
+    return
+  fi
+  case "$status" in
+    Charging)    label="${G}charging${RESET}" ; plug=" ⚡" ;;
+    Full)        label="${G}full${RESET}" ; plug=" ⚡" ;;
+    Discharging) label="${Y}discharging${RESET}" ;;
+    "Not charging") label="${Y}plugged${RESET}" ; plug=" ⚡" ;;
+    *)           label="${D}${status}${RESET}" ;;
+  esac
+  if [[ "$ac" == "1" && "$status" == "Discharging" ]]; then
+    plug=" ⚡"
+  fi
+  # invert bar colors: low battery = red
+  local color="$G"
+  (( pct <= 30 )) && color="$Y"
+  (( pct <= 15 )) && color="$R"
+  local filled empty i width=36
+  filled=$(( pct * width / 100 ))
+  empty=$(( width - filled ))
+  printf "%s" "$color"
+  for (( i = 0; i < filled; i++ )); do printf "█"; done
+  printf "%s" "$D"
+  for (( i = 0; i < empty; i++ )); do printf "░"; done
+  printf "%s  ${BOLD}%s%%%s${RESET}  %s" "$RESET" "$pct" "$plug" "$label"
+}
+
+format_wifi_line() {
+  local state="$1" ssid="$2" signal="$3"
+  if [[ "$state" == "n/a" ]]; then
+    echo "${D}no wifi interface${RESET}"
+    return
+  fi
+  if [[ "$state" != "up" || "$ssid" == "none" ]]; then
+    echo "${R}disconnected${RESET}  ${D}(lonely packets)${RESET}"
+    return
+  fi
+  local pretty="${ssid//_/ }"
+  local sigbit=""
+  if [[ "$signal" =~ ^[0-9]+$ ]]; then
+    sigbit="$(bar "$signal" 16)  ${signal}%"
+  else
+    sigbit="${D}signal n/a${RESET}"
+  fi
+  echo "${G}connected${RESET}  ${BOLD}${pretty}${RESET}  $sigbit"
+}
+
+format_eth_line() {
+  local state="$1" iface="$2" ipaddr="$3"
+  if [[ "$state" == "n/a" || "$iface" == "none" ]]; then
+    echo "${D}no ethernet${RESET}"
+    return
+  fi
+  if [[ "$state" == "up" ]]; then
+    echo "${G}up${RESET}  ${iface}  ${ipaddr}"
+  else
+    echo "${D}down${RESET}  ${iface}"
+  fi
+}
+
 draw() {
   local cpu_pct mem_u mem_t mem_p swap_u swap_t swap_p disk_u disk_t disk_p
-  local load cores model host up kernel ip procs users now
-  local bright_p vol_p vol_m controls_block flash_line hotkeys_hint
+  local load cores model host up kernel ip procs users
+  local clock_hms clock_date clock_tz
+  local bat_p bat_s ac_on wifi_st wifi_ssid wifi_sig eth_st eth_if eth_ip net_conn
+  local bright_p vol_p vol_m controls_block flash_line
+  local bat_line wifi_line eth_line conn_label
 
   cpu_pct="$(get_cpu_pct)"
   read -r mem_u mem_t mem_p <<<"$(get_mem)"
@@ -390,10 +640,29 @@ draw() {
   ip="$(get_ip)"
   procs="$(get_procs)"
   users="$(get_users)"
-  now="$(date '+%Y-%m-%d %H:%M:%S')"
+
+  clock_hms="$(date '+%H:%M:%S')"
+  clock_date="$(date '+%a %Y-%m-%d')"
+  clock_tz="$(get_timezone)"
+
+  read -r bat_p bat_s <<<"$(get_battery)"
+  ac_on="$(get_ac_online)"
+  read -r wifi_st wifi_ssid wifi_sig <<<"$(get_wifi)"
+  read -r eth_st eth_if eth_ip <<<"$(get_ethernet)"
+  net_conn="$(get_connectivity)"
 
   bright_p="$(get_brightness_pct)"
   read -r vol_p vol_m <<<"$(get_volume_state)"
+
+  bat_line="$(format_battery_line "$bat_p" "$bat_s" "$ac_on")"
+  wifi_line="$(format_wifi_line "$wifi_st" "$wifi_ssid" "$wifi_sig")"
+  eth_line="$(format_eth_line "$eth_st" "$eth_if" "$eth_ip")"
+
+  case "$net_conn" in
+    online)  conn_label="${G}online${RESET}" ;;
+    offline) conn_label="${R}offline${RESET}" ;;
+    *)       conn_label="${D}unknown${RESET}" ;;
+  esac
 
   if (( CONTROLS )); then
     local bbar vbar vlabel
@@ -446,12 +715,17 @@ ${BOLD}${C}
      ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 ${RESET}${DIM}  Terminal Awesome System HUD  ·  judging your hardware since 2026${RESET}
 
-  ${BOLD}${W}${host}${RESET}  ${D}│${RESET}  ${kernel}  ${D}│${RESET}  ${ip:-?}  ${D}│${RESET}  ${now}
+  ${BOLD}${W}${host}${RESET}  ${D}│${RESET}  ${kernel}  ${D}│${RESET}  ${ip:-?}
 
+  ${BOLD}${W}TIME${RESET}   ${BOLD}${clock_hms}${RESET}  ${D}${clock_date}  ${clock_tz}${RESET}
   ${BOLD}STATUS${RESET}   $(mood "$cpu_pct" "$mem_p" "$disk_p")
-  ${BOLD}UPTIME${RESET}   ${up}   ${D}(still going — impressive or concerning)${RESET}
-  ${BOLD}LOAD${RESET}     ${load}   ${D}(${cores} cores)${RESET}
+  ${BOLD}UPTIME${RESET}   ${up}   ${D}│${RESET}  ${BOLD}LOAD${RESET}  ${load}  ${D}(${cores} cores)${RESET}
   ${BOLD}USERS${RESET}    ${users} logged in   ${D}│${RESET}  ${BOLD}PROCS${RESET}  ${procs}
+
+  ${BOLD}${Y}BAT${RESET}   $bat_line
+  ${BOLD}${B}WIFI${RESET}  $wifi_line
+  ${BOLD}${B}ETH${RESET}   $eth_line
+  ${BOLD}NET${RESET}    $conn_label  ${D}│${RESET}  ip ${ip:-?}
 
   ${BOLD}${B}CPU${RESET}   $(bar "$cpu_pct" 36)  ${BOLD}${cpu_pct}%${RESET}
         ${DIM}${model}${RESET}
