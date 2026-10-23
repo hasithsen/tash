@@ -3,8 +3,9 @@
 **T**erminal **A**wesome **S**ystem **H**UD
 
 > Using `tash` makes you awesome.  
-> Not busier. Not louder. Just… in on it.  
-> The whole method is `./tash`. We named it that on purpose.
+> Not because the bars are teal — though they are — but because you finally know what your laptop is doing.  
+> Clarity looks like confidence. Confidence looks like awesome.  
+> Start with `./tash`.
 
 ```
   ████████╗ █████╗ ███████╗██╗  ██╗
@@ -15,38 +16,25 @@
      ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 ```
 
-## The story
+## The idea
 
-You stripped the desktop off your laptop “for purity.”
+A bare laptop. Debian minimal. No desktop, no battery icon, Fn keys that do nothing — and you, opening five terminals to ask the same question five ways.
 
-Debian minimal. One cursor. One fan auditioning for a musical. No battery icon — just faith and `cat`.
+Then you run `tash`.
 
-Fans hit takeoff. Chrome? Compile? Divine intervention with jokes? You hit Fn+brightness. Nothing. Fn+volume. Still nothing. The keys had retired.
+One screen. Mood, battery life, network, load, memory. Brightness and volume when you need them. On a console without a DE, Fn keys that actually work.
 
-So you opened more terminals. `top`. `htop`. `free -h`. A guide that started with “simply” and hadn’t been simply since another decade. Wi‑Fi: connected, or method acting?
+You refresh instead of rebooting.  
+You look like you know.  
+You *do* know. That is the awesome.
 
-Someone said: try `tash`.  
-(Friend. Stranger. Raccoon with `sudo`. Unclear.)
+## What it shows
 
-You ran `./tash`.
-
-Teal. Bars. Mood: *mildly concerned*. One Electron tab closed. Mood: *vibing*. Battery **81%** · **2h 14m left**. Wi‑Fi: real. `tash-hotkeys` brought the Fn row back from lunch (started when GNOME left).
-
-You hadn’t learned French.  
-You had become **awesome**.
-
-## What you get
-
-A live HUD. Your laptop, finally talking sense.
-
-- **Mood** — `vibing` through `panicking quietly`
-- **Battery** — % plus time left / to full
-- **Clock, Wi‑Fi, ethernet, online/offline**
-- **CPU, RAM, swap, disk** — bars that blush when things heat up
-- **Brightness + volume** in-app; **Fn keys** on bare Debian via `tash-hotkeys`
-
-Friends reboot “just to see.”  
-You refresh. That’s the glow-up.
+- **Mood** — a short read on the machine (`vibing` … `panicking quietly`)
+- **Battery** — percent and time left (or time to full)
+- **Clock, Wi‑Fi, ethernet, online / offline**
+- **CPU, memory, swap, disk** — clear bars, honest colors
+- **Brightness and volume** — keys in the HUD; Fn keys on bare Debian via `tash-hotkeys`
 
 ## Quick start
 
@@ -55,41 +43,41 @@ chmod +x tash tash-ctl tash-hotkeys
 ./tash
 ```
 
-| Command | Result |
-|---------|--------|
-| `./tash` | Live HUD. Awesome onset. |
-| `./tash --once` | One frame. |
-| `tash-ctl status` | Brightness + volume |
-| `tash-ctl brightness up` | More light |
-| `tash-ctl volume down` | More peace |
-| `tash-hotkeys` | Fn keys, employed again |
+| Command | Purpose |
+|---------|---------|
+| `./tash` | Live HUD |
+| `./tash --once` | Single frame |
+| `tash-ctl status` | Brightness and volume |
+| `tash-ctl brightness up` | Brighter |
+| `tash-ctl volume down` | Quieter |
+| `tash-hotkeys` | System-wide Fn keys |
 
-## Keys
+## Keyboard
 
 | Key | Action |
 |-----|--------|
-| `[` `]` | Brightness ↓ / ↑ |
-| `-` `=` | Volume ↓ / ↑ |
+| `[` `]` | Brightness down / up |
+| `-` `=` | Volume down / up |
 | `m` | Mute |
-| `q` | Quit (awesome stays) |
+| `q` | Quit |
 
-### Fn keys (Debian minimal, no desktop)
+### Fn keys on Debian minimal (no desktop)
 
-Fn keys don’t magic a DE into existence. They show up on `/dev/input/event*` and wait.
+Without a desktop, media keys only appear as events on `/dev/input/event*`. Something has to listen — that is `tash-hotkeys`:
 
 ```bash
 sudo ./contrib/debian-minimal/install.sh
-# re-login (groups: video, input, audio)
+# log out and back in (groups: video, input, audio)
 ```
 
-Installs binaries, `alsa-utils`, `python3`, backlight udev rule, groups, and `tash-hotkeys.service`.
+This installs the tools, `alsa-utils`, `python3`, a backlight udev rule, group membership, and `tash-hotkeys.service`.
 
 ```bash
 tash-ctl brightness up
 tash-hotkeys --test
 ```
 
-No events? `sudo evtest` — find what flinches.
+If `--test` shows nothing, use `sudo evtest` to find which device fires.
 
 ## `tash-ctl`
 
@@ -99,9 +87,9 @@ tash-ctl volume     get|up|down|set 30|mute|unmute|toggle
 tash-ctl status
 ```
 
-**PipeWire** → **PulseAudio** → **ALSA**.
+Backends: **PipeWire** → **PulseAudio** → **ALSA**.
 
-## Manual Debian bits
+## Debian minimal (manual)
 
 ```bash
 sudo apt-get install -y alsa-utils python3
@@ -111,50 +99,46 @@ sudo cp contrib/debian-minimal/99-tash-backlight.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger -s backlight
 ```
 
-No Python? `triggerhappy` + `contrib/debian-minimal/triggerhappy-tash.conf`.
+Or use triggerhappy instead of Python — see `contrib/debian-minimal/`.
 
 ## Requirements
 
 - `bash`
-- Linux for brightness / Fn (macOS: HUD only)
-- Style auto-picks: **rich** · **minimal** (`TERM=linux`) · **ascii**
-- Force: `TASH_STYLE=minimal` or `ascii`
-- Fn: `/dev/input/event*` + `python3` (or triggerhappy)
+- Linux for brightness and Fn keys (macOS: HUD works; backlight hotkeys are Linux-only)
+- Auto style: **rich** · **minimal** (`TERM=linux`) · **ascii**  
+  Override: `TASH_STYLE=minimal` or `TASH_BASIC_COLOR=1`
+- Fn keys: `/dev/input/event*` and `python3` (or triggerhappy)
 
 ## Moods
 
-| Mood | Move |
-|------|------|
-| living its best life | Screenshot it |
-| vibing | Say nothing |
-| mildly concerned | Close that tab |
-| panicking quietly | Tabs ↓ · RAM ↑ |
+| Mood | Meaning |
+|------|---------|
+| living its best life | Quiet machine — enjoy it |
+| vibing | Normal |
+| mildly concerned | Something is busy |
+| panicking quietly | Ease the load |
 
 ## FAQ
 
-**Does `tash` make you awesome?**  
-Yes.
+**Does using `tash` make you awesome?**  
+Yes. Knowing your machine is half the look; the teal is the other half.
 
-**Still feel normal?**  
-Check `mood`. *Vibing* is the feeling. You’re welcome.
+**Why don’t Fn keys work inside `tash` alone?**  
+They arrive on evdev, not stdin. Run `tash-hotkeys`.
 
-**Fn keys dead inside `tash`?**  
-They use evdev, not stdin. Run `tash-hotkeys`.
+**Brightness: permission denied?**  
+Join group `video`, reload udev, log in again.
 
-**Brightness denied?**  
-Join `video`, reload udev, re-login.
+**No sound change?**  
+Install `alsa-utils` and check `alsamixer`.
 
-**No volume?**  
-`alsa-utils` + `alsamixer`. HDMI will gaslight you.
-
-**Vs `htop`?**  
-`htop` counts. `tash` dims the lights and calls you awesome.
+**Compared to `htop`?**  
+`htop` lists processes. `tash` is the overview — battery, network, backlight, and the quiet sense that you have it in hand.
 
 ## License
 
-MIT.  
-Mood says *panicking quietly* and you still feel awesome? Working as intended.
+MIT. Use it. Share it. Stay awesome.
 
 ---
 
-*Terminals. Machines. `./tash`. Awesome.*
+*For terminals. For laptops. For people who run `./tash`.*
