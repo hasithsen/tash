@@ -2,13 +2,12 @@
 
 **T**erminal **A**wesome **S**ystem **H**UD
 
-> You are alone on a Debian minimal install.  
-> No wallpaper. No widgets. No little battery icon that lies to you.  
-> Just a blinking cursor, and the quiet fear that something is On Fire.  
+> Will running a bash script that draws CPU bars make you awesome?  
+> **No.**  
+> Absolutely not. That’s a ridiculous thing to believe.  
 >
-> Then you type `./tash`.  
-> The screen clears. A teal wordmark appears. Your laptop confesses.  
-> You exhale. You are — against all odds — **fine**. Maybe even *awesome*.
+> …Unless you run `./tash`, in which case — hear us out — you *might* become awesome.  
+> Not legally. Not medically. But in the important, unserious way. The way that counts when someone glances at your TTY and whispers *who is that.*
 
 ```
   ████████╗ █████╗ ███████╗██╗  ██╗
@@ -19,85 +18,109 @@
      ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 ```
 
-## This is the feeling
+## The absurd premise (we’re selling it anyway)
 
-Not productivity. Not “observability.”  
-The feeling of knowing — *really knowing* — that your CPU is at 4% and your battery has **2h 14m left** and the Wi‑Fi is not, in fact, a rumor.
+**Claim:** Using `tash` makes you awesome.  
+**Reality:** Using `tash` makes you a person who installed `tash`.  
+**Marketing:** Those are the same person. Don’t look it up.
 
-Your friends mash `top` like they’re defusing a bomb.  
-You open `tash` like you’re checking the weather on a yacht.
+You will not levitate. Your git commits will not suddenly pass review.  
+You *will* know your battery has **2h 14m left** while your friends are still opening Settings like it’s 2014.
 
-- **Mood line** that roast-validates your life choices (`vibing` / `panicking quietly`)
-- **Battery % + life remaining** — because a naked percentage is emotional neglect
-- **Wi‑Fi, ethernet, clock, load, RAM, disk** — one frame, zero shame-Googling
-- **Brightness + volume** from the HUD *and* real **Fn keys** on a bare console  
-  (no desktop, no GNOME, no “have you tried installing a whole universe?”)
-- Bars that go amber when you’re in denial and red when the silicon wants a lawyer
+That’s the whole scam. We’re very honest about the scam.  
+Please buy in.
 
-It will **not** text your ex.  
-It **will** tell you your swap is crying in the corner.
+## Before / after (peer-reviewed by vibes)
 
-## Quick start (inhale → exhale → awesome)
+| Before `tash` | After `tash` |
+|---------------|--------------|
+| “Is my CPU… fine?” | “Mood: vibing. I contain multitudes.” |
+| Reboots to “check” | Refreshes a teal HUD like a pilot |
+| Fn keys are decorative | Fn keys obey you (Debian minimal arc) |
+| Battery says 67% | Battery says 67% *and* how long you have left to be dramatic |
+| Googles `linux wifi ssid terminal` | Already looking at it. Casually. |
+
+Is this character development?  
+Or just ANSI color codes?  
+
+**Yes.**
+
+## What you get (the awesome toolkit, which is also just software)
+
+- A live system HUD that stares back until one of you blinks (you)
+- Progress bars that go amber when you’re in denial and red when the machine wants HR involved
+- Clock, battery % + estimated life, Wi‑Fi, ethernet, online/offline — one screen, zero spiritual crisis tabs
+- Brightness + volume from the dashboard *and* real Fn / media keys on a bare console (no DE, no GNOME, no “just use Ubuntu”)
+- Styles that auto-adapt so even a raw Debian tty can participate in the bit
+
+It will **not** fix your posture.  
+It **will** imply that you have posture.
+
+## Quick start (the moment the prophecy fulfills itself)
 
 ```bash
 chmod +x tash tash-ctl tash-hotkeys
 ./tash
 ```
 
-That’s it. No signup. No telemetry. No “join our Discord for metrics tips.”  
-Just you, a HUD, and the soft hum of competence.
+Congratulations.  
+You are now statistically indistinguishable from someone who has their life together, provided the camera is aimed at the terminal and cropped tightly.
 
-| You type | You become |
-|----------|------------|
-| `./tash` | Someone who *knows* |
-| `./tash --once` | A film still. Iconic. |
-| `tash-ctl status` | Briefly omniscient |
-| `tash-ctl brightness up` | A small god of lumens |
-| `tash-ctl volume down` | The reason the neighbors stayed |
-| `tash-hotkeys` | Fn-key royalty |
+No account. No cloud. No “unlock Awesome Mode with Pro.”  
+Awesome Mode is just `./tash`. That’s the joke. That’s also the product.
+
+| Command | Official meaning | What you’ll tell people |
+|---------|------------------|-------------------------|
+| `./tash` | Start the HUD | “I’m monitoring the fleet.” (it is one laptop) |
+| `./tash --once` | Single frame | “Cinematic still. For the brand.” |
+| `tash-ctl status` | Brightness + volume | “Systems check.” |
+| `tash-ctl brightness up` | Brighter panel | “Let there be slightly more light.” |
+| `tash-ctl volume down` | Quieter | “For the neighbors’ marriage.” |
+| `tash-hotkeys` | Fn-key daemon | “I restored the Fn row to the throne.” |
 
 ## Keyboard controls
 
 ### Inside `tash` (any terminal / TTY)
 
-| Key | Action | How it feels |
-|-----|--------|--------------|
-| `[` `]` | Brightness down / up | Adjusting the vibe dimmer |
-| `-` `=` | Volume down / up | Conducting the beep orchestra |
-| `m` | Mute | Instant main-character silence |
-| `q` | Quit | Mic drop, but polite |
+| Key | Action | Aura delta |
+|-----|--------|------------|
+| `[` `]` | Brightness down / up | ±1 mysterious pilot |
+| `-` `=` | Volume down / up | DJ residency (local only) |
+| `m` | Mute | Main-character silence |
+| `q` | Quit | Exit the bit (temporary) |
 
 ### Fn keys on Debian minimal (**no desktop**)
 
-You pressed Fn+F5. Nothing happened.  
-Your soul left your body for a moment.
+You bought a laptop. It has Fn keys. They do nothing.  
+This is not a personal failing. This is capitalism forgetting to ship a daemon.
 
-That’s normal. Without a desktop environment there is no friendly daemon catching media keys. They show up as raw Linux input events on `/dev/input/event*`, lonely and unheard — until **`tash-hotkeys`** adopts them:
+Without a desktop environment, brightness/volume keys are just lonely events on `/dev/input/event*`.  
+`tash-hotkeys` is the ridiculous little middleman that makes the absurd premise *tactile*:
 
 ```bash
 sudo ./contrib/debian-minimal/install.sh
 # log out / back in (groups: video, input, audio)
-# then press Fn+brightness like you mean it
 ```
 
-What the installer does (the unsexy part of feeling powerful):
+Installer vibes (quietly competent, slightly smug):
 
-1. Installs `tash`, `tash-ctl`, `tash-hotkeys` → `/usr/local/bin`
-2. Pulls in `alsa-utils` + `python3`
-3. Drops a **udev rule** so `video` can write backlight brightness
+1. Drops `tash`, `tash-ctl`, `tash-hotkeys` in `/usr/local/bin`
+2. Installs `alsa-utils` + `python3`
+3. Adds a **udev rule** so group `video` can write backlight brightness
 4. Adds you to `video`, `input`, `audio`
 5. Enables `tash-hotkeys.service` so Fn keys work on the raw TTY
 
-Prove it. Feel it:
+Feel the power (or at least the backlight):
 
 ```bash
 tash-ctl brightness up
 tash-ctl volume toggle
 sudo tash-hotkeys --list
-tash-hotkeys --test          # mash the Fn row; watch destiny scroll by
+tash-hotkeys --test          # mash Fn; watch events; become lore
 ```
 
-If `--test` is silent, your firmware is doing improv. Run `sudo evtest`, find the device that actually flinches, and proceed as a person with lore.
+If `--test` shows nothing, your firmware is doing performance art.  
+`sudo evtest` until something flinches. Awesome people debug. Delusional people call it destiny. We support both.
 
 ## Manual controls (`tash-ctl`)
 
@@ -107,12 +130,12 @@ tash-ctl volume     get|up|down|set 30|mute|unmute|toggle
 tash-ctl status
 ```
 
-Backends, in priority order: **PipeWire** → **PulseAudio** → **ALSA**.  
-First one to answer the phone gets to be in your montage.
+Backends: **PipeWire** → **PulseAudio** → **ALSA**.  
+Whichever answers first gets naming rights in your origin story.
 
 ## Debian minimal cheat sheet
 
-For when you skipped the installer because you “like doing things the hard way” (we see you, we respect you, we are also tired):
+For the highly awesome who refuse installers on principle:
 
 ```bash
 sudo apt-get install -y alsa-utils python3
@@ -122,7 +145,7 @@ sudo cp contrib/debian-minimal/99-tash-backlight.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger -s backlight
 ```
 
-Allergic to Python? `triggerhappy` still gets you to the same emotional beat:
+Python-free path (still counts toward Awesome; we checked the rules, the rules are made up):
 
 ```bash
 sudo apt-get install -y triggerhappy
@@ -131,65 +154,70 @@ sudo cp contrib/debian-minimal/triggerhappy-tash.conf \
 sudo systemctl enable --now triggerhappy
 ```
 
-## Requirements (the tiny gate before the feeling)
+## Requirements
 
-- `bash` — judgmental, loyal
-- Linux for brightness / Fn keys (macOS still gets the HUD; backlight hotkeys are a Linux subplot)
-- A terminal. Style auto-adapts so the feeling survives ugly hardware:
-  - **rich** — soft 256-color, calm chrome, cinematic bars
-  - **minimal** — Debian tty / `TERM=linux`: bold 16-color, no vanishing gray, bars you can actually *see*
-  - **ascii** — when UTF-8 ghosted you (`#` / `-`, still dramatic)
-- Override: `TASH_STYLE=rich|minimal|ascii` or `TASH_BASIC_COLOR=1`
-- Fn keys: read access to `/dev/input/event*` + `python3` (or triggerhappy)
+- `bash` (picky enough to matter, chill enough to ship)
+- Linux for brightness / Fn keys (macOS gets the HUD; backlight hotkeys remain a Linux subplot)
+- A terminal — style auto-picks so the premise survives bad hardware:
+  - **rich** — soft 256-color, elegant chrome
+  - **minimal** — Debian tty / `TERM=linux`: bold 16-color, no vanishing gray, bars with actual contrast
+  - **ascii** — `#`/`-` when UTF-8 leaves you on read
+- Force it: `TASH_STYLE=rich|minimal|ascii` or `TASH_BASIC_COLOR=1`
+- Fn keys need `/dev/input/event*` + `python3` (or triggerhappy)
 
-### Console looks haunted?
+### “I can’t read this / the bars look fake”
 
-Bright-black text on a Linux VGA console is a war crime against your eyeballs.  
-`tash` notices `TERM=linux` and switches to **minimal** style automatically — bold cyan labels, white values, bars with contrast that slap.
+Yes — bright-black on a Linux VGA console is how hope dies.  
+`tash` sees `TERM=linux` and switches to **minimal** style so you can keep pretending this is a flex:
 
 ```bash
-TASH_STYLE=minimal ./tash   # “I can read again”
-TASH_STYLE=ascii ./tash     # “burn it down, rebuild in hash marks”
+TASH_STYLE=minimal ./tash
+TASH_STYLE=ascii ./tash     # if you want the bit in pure hash marks
 ```
 
-## Mood guide (emotional support, but make it metrics)
+## Mood guide (emotional support metrics)
 
-| Mood | What’s happening | What you do |
-|------|------------------|-------------|
-| living its best life | CPU napping, RAM yoga | Screenshot. Frame it. Tell no one how rare this is. |
-| vibing | Normal chaos | Stay mysterious. Sip something. |
-| mildly concerned | Something’s cooking | Close the Electron app. You already know which one. |
-| panicking quietly | The machine has filed a complaint | Tabs. RAM. Grass. Not necessarily in that order. |
+| Mood | Translation | Recommended bit |
+|------|-------------|-----------------|
+| living its best life | Machine is thriving | Screenshot. Caption: “me.” |
+| vibing | Normal | Say nothing. Mystery is free. |
+| mildly concerned | Something’s cooking | Close the Electron app. You know the one. |
+| panicking quietly | Hardware has opinions | Tabs ↓ · RAM ↑ · grass → |
 
-## FAQ (feelings, annotated)
+## FAQ (frequently absurd questions)
 
 **Will `tash` make me awesome?**  
-It will make you *look* awesome, which is 91% of the job. The other 9% is closing Chrome.
+Scientifically? No.  
+Cosmetically, in a terminal, for five seconds, if the lighting is good? **We’re saying yes.**  
+That tension *is* the product.
 
-**I ran it and felt nothing.**  
-Impossible. Check `mood`. If it says `vibing`, you felt something — you just called it “looking at a terminal.”
+**Isn’t that just placebo?**  
+Placebo is underrated. Placebo got people through finals. Placebo is why RGB exists. Run the HUD.
+
+**I used `tash` and I’m still the same.**  
+Correct. But now you know your load average. Growth.
 
 **Why don’t Fn keys work inside `tash` alone?**  
-Because Fn keys don’t walk in through stdin like polite characters. They kick the door on evdev. `tash-hotkeys` is the bouncer who finally lets them in.
+They don’t arrive on stdin. They riot on evdev. `tash-hotkeys` is the adult supervision your DE used to pretend to be.
 
 **Brightness: permission denied**  
-You’re not in group `video`, or udev didn’t get the memo. Re-run the installer. Re-login. Awesome is 10% aura, 90% groups.
+Groups. Udev. Re-login. Awesome is 10% narrative, 90% `usermod`.
 
 **Volume does nothing**  
-`sudo apt-get install -y alsa-utils`, then `alsamixer`. HDMI-only machines will gaslight you. That’s not a you problem; that’s a port problem.
+`sudo apt-get install -y alsa-utils` and visit `alsamixer`. HDMI-only boxes will betray you with a smile.
 
 **Is this better than `htop`?**  
-Different religion. `htop` counts processes. `tash` changes your backlight and judges your life. Both valid. Gym has more than one machine.
+`htop` is a process census. `tash` is a personality. Different sports. Same delusion that staring at numbers helps. (It helps a little.)
 
-**Can this be in my rice screenshot?**  
-Yes. Credit the teal. The teal has trust issues.
+**Can I put this in my rice screenshot?**  
+Yes. Credit the teal. The teal is insecure and needs this.
 
 ## License
 
-MIT — go wild.  
-If the mood says *panicking quietly* and the speakers agree, that’s between you and the hardware.
+MIT — do what you want.  
+If the mood says *panicking quietly* and you still feel awesome, that’s the bit working.
 
 ---
 
 *Made for terminals. Judged by machines.*  
-*You: slightly more awesome. Optional. Strongly encouraged. Felt in the chest.*
+*Awesome sold separately. Awesome included free with `./tash`. Awesome is fake. Awesome is real. Run it.*
