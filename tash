@@ -1,0 +1,508 @@
+#!/usr/bin/env bash
+# tash — Terminal Awesome System HUD
+# A slightly judgmental dashboard for your machine.
+# On bare Debian (no DE): pair with tash-hotkeys for Fn brightness/volume keys.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CTL="${TASH_CTL:-$SCRIPT_DIR/tash-ctl}"
+[[ -x "$CTL" ]] || CTL="$(command -v tash-ctl 2>/dev/null || echo "$SCRIPT_DIR/tash-ctl")"
+
+REFRESH="${TASH_REFRESH:-2}"
+ONCE=0
+NO_COLOR=0
+CONTROLS=1
+FLASH=""
+FLASH_TTL=0
+
+# CPU sample state (no sleep-in-draw)
+CPU_PREV_TOTAL=""
+CPU_PREV_IDLE=""
+
+usage() {
+  cat <<'EOF'
+tash — Terminal Awesome System HUD
+
+Usage: tash [options]
+
+Options:
+  -r, --refresh SEC   Refresh interval in seconds (default: 2)
+  -1, --once          Draw once and exit
+  -n, --no-color      Disable colors (for terminals that fear joy)
+      --no-controls   Hide brightness/volume + disable in-dashboard keys
+  -h, --help          Show this help
+
+In-dashboard keys (TTY / terminal — always available):
+  [  ]     brightness down / up
+  -  =     volume down / up
+  m        mute toggle
+  q        quit
+
+Fn / media keys (Debian minimal, no DE):
+  Run the hotkey daemon so firmware keys reach tash-ctl:
+    sudo ./contrib/debian-minimal/install.sh
+    # or: tash-hotkeys
+  Those work system-wide, even when tash is not open.
+
+Environment:
+  TASH_REFRESH        Default refresh interval
+  TASH_CTL            Path to tash-ctl
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -r|--refresh) REFRESH="${2:?}"; shift 2 ;;
+    -1|--once) ONCE=1; shift ;;
+    -n|--no-color) NO_COLOR=1; shift ;;
+    --no-controls) CONTROLS=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+# ── colors ──────────────────────────────────────────────────────────────────
+if [[ "$NO_COLOR" -eq 1 ]] || [[ ! -t 1 ]]; then
+  R= G= Y= B= M= C= W= D= BOLD= DIM= RESET=
+else
+  R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'
+  M=$'\033[35m'; C=$'\033[36m'; W=$'\033[37m'; D=$'\033[90m'
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+fi
+
+bar() {
+  local pct="$1" width="${2:-30}"
+  local filled empty i
+  (( pct < 0 )) && pct=0
+  (( pct > 100 )) && pct=100
+  filled=$(( pct * width / 100 ))
+  empty=$(( width - filled ))
+
+  local color="$G"
+  (( pct >= 70 )) && color="$Y"
+  (( pct >= 90 )) && color="$R"
+
+  printf "%s" "$color"
+  for (( i = 0; i < filled; i++ )); do printf "█"; done
+  printf "%s" "$D"
+  for (( i = 0; i < empty; i++ )); do printf "░"; done
+  printf "%s" "$RESET"
+}
+
+human_bytes() {
+  local bytes="${1:-0}"
+  if command -v numfmt >/dev/null 2>&1; then
+    numfmt --to=iec --suffix=B "$bytes" 2>/dev/null && return
+  fi
+  local units=(B KiB MiB GiB TiB) i=0
+  local val="$bytes"
+  while (( val >= 1024 && i < ${#units[@]} - 1 )); do
+    val=$(( val / 1024 ))
+    (( i++ )) || true
+  done
+  printf "%s %s" "$val" "${units[$i]}"
+}
+
+detect_os() {
+  case "$(uname -s)" in
+    Linux*)  echo "linux" ;;
+    Darwin*) echo "darwin" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *)       echo "unknown" ;;
+  esac
+}
+
+OS="$(detect_os)"
+
+get_hostname() {
+  hostname 2>/dev/null || uname -n 2>/dev/null || echo "mystery-box"
+}
+
+get_uptime_str() {
+  if [[ "$OS" == "darwin" ]]; then
+    local boot now
+    boot="$(sysctl -n kern.boottime 2>/dev/null | awk -F'[=,]' '{print $2}' | tr -d ' ')"
+    now="$(date +%s)"
+    if [[ -n "$boot" ]]; then
+      local sec=$(( now - boot ))
+      local d=$(( sec / 86400 )) h=$(( (sec % 86400) / 3600 )) m=$(( (sec % 3600) / 60 ))
+      printf "%dd %dh %dm" "$d" "$h" "$m"
+      return
+    fi
+  fi
+  if [[ -r /proc/uptime ]]; then
+    local sec
+    sec="$(awk '{print int($1)}' /proc/uptime)"
+    local d=$(( sec / 86400 )) h=$(( (sec % 86400) / 3600 )) m=$(( (sec % 3600) / 60 ))
+    printf "%dd %dh %dm" "$d" "$h" "$m"
+    return
+  fi
+  uptime 2>/dev/null | sed 's/.*up //; s/,.*//' || echo "eternity"
+}
+
+get_load() {
+  if [[ -r /proc/loadavg ]]; then
+    awk '{printf "%s %s %s", $1, $2, $3}' /proc/loadavg
+  elif [[ "$OS" == "darwin" ]]; then
+    sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{printf "%s %s %s", $1, $2, $3}'
+  else
+    uptime 2>/dev/null | awk -F'load average[s]?: ' '{print $2}' | tr -d ',' || echo "? ? ?"
+  fi
+}
+
+get_cpu_count() {
+  if [[ "$OS" == "darwin" ]]; then
+    sysctl -n hw.ncpu 2>/dev/null || echo 1
+  elif [[ -r /proc/cpuinfo ]]; then
+    grep -c '^processor' /proc/cpuinfo 2>/dev/null || nproc 2>/dev/null || echo 1
+  else
+    nproc 2>/dev/null || echo 1
+  fi
+}
+
+get_cpu_model() {
+  if [[ "$OS" == "darwin" ]]; then
+    sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "Apple Mystery Chip"
+  elif [[ -r /proc/cpuinfo ]]; then
+    grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//' || echo "Unknown CPU"
+  else
+    echo "Unknown CPU"
+  fi
+}
+
+read_cpu_times() {
+  # prints: total idle
+  awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8,$5}' /proc/stat 2>/dev/null
+}
+
+get_cpu_pct() {
+  if [[ -r /proc/stat ]]; then
+    local total idle
+    read -r total idle <<<"$(read_cpu_times)"
+    if [[ -n "$CPU_PREV_TOTAL" ]]; then
+      local dt=$(( total - CPU_PREV_TOTAL ))
+      local di=$(( idle - CPU_PREV_IDLE ))
+      CPU_PREV_TOTAL=$total
+      CPU_PREV_IDLE=$idle
+      if (( dt > 0 )); then
+        echo $(( (100 * (dt - di)) / dt ))
+      else
+        echo 0
+      fi
+    else
+      CPU_PREV_TOTAL=$total
+      CPU_PREV_IDLE=$idle
+      # seed with a tiny sample so --once still shows something useful
+      sleep 0.08
+      read -r total idle <<<"$(read_cpu_times)"
+      local dt=$(( total - CPU_PREV_TOTAL ))
+      local di=$(( idle - CPU_PREV_IDLE ))
+      CPU_PREV_TOTAL=$total
+      CPU_PREV_IDLE=$idle
+      if (( dt > 0 )); then
+        echo $(( (100 * (dt - di)) / dt ))
+      else
+        echo 0
+      fi
+    fi
+  elif [[ "$OS" == "darwin" ]]; then
+    top -l 1 -n 0 2>/dev/null | awk '/CPU usage/ {
+      gsub(/%/,"",$3); gsub(/%/,"",$5);
+      printf "%d", $3+$5
+    }' || echo 0
+  else
+    echo 0
+  fi
+}
+
+get_mem() {
+  if [[ "$OS" == "darwin" ]]; then
+    local page total free inactive speculative wired compressed used pct
+    page="$(sysctl -n hw.pagesize 2>/dev/null || echo 4096)"
+    total="$(sysctl -n hw.memsize 2>/dev/null || echo 0)"
+    free="$(vm_stat 2>/dev/null | awk '/Pages free/{gsub(/\./,"",$3); print $3}')"
+    inactive="$(vm_stat 2>/dev/null | awk '/Pages inactive/{gsub(/\./,"",$3); print $3}')"
+    speculative="$(vm_stat 2>/dev/null | awk '/Pages speculative/{gsub(/\./,"",$3); print $3}')"
+    free=${free:-0}; inactive=${inactive:-0}; speculative=${speculative:-0}
+    used=$(( total - (free + speculative + inactive) * page ))
+    (( used < 0 )) && used=0
+    if (( total > 0 )); then
+      pct=$(( used * 100 / total ))
+    else
+      pct=0
+    fi
+    printf "%s %s %s" "$used" "$total" "$pct"
+  elif [[ -r /proc/meminfo ]]; then
+    local total avail used pct
+    total="$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
+    avail="$(awk '/MemAvailable/{print $2*1024}' /proc/meminfo)"
+    used=$(( total - avail ))
+    pct=$(( used * 100 / total ))
+    printf "%s %s %s" "$used" "$total" "$pct"
+  else
+    printf "0 0 0"
+  fi
+}
+
+get_swap() {
+  if [[ "$OS" == "darwin" ]]; then
+    local total used
+    total="$(sysctl -n vm.swapusage 2>/dev/null | awk '{print $3}' | tr -d 'M')"
+    used="$(sysctl -n vm.swapusage 2>/dev/null | awk '{print $6}' | tr -d 'M')"
+    total=${total%.*}; used=${used%.*}
+    total=${total:-0}; used=${used:-0}
+    local pct=0
+    (( total > 0 )) && pct=$(( used * 100 / total ))
+    printf "%s %s %s" "$(( used * 1024 * 1024 ))" "$(( total * 1024 * 1024 ))" "$pct"
+  elif [[ -r /proc/meminfo ]]; then
+    local total used pct
+    total="$(awk '/SwapTotal/{print $2*1024}' /proc/meminfo)"
+    used="$(awk '/SwapTotal/{t=$2} /SwapFree/{print (t-$2)*1024}' /proc/meminfo)"
+    if (( total > 0 )); then
+      pct=$(( used * 100 / total ))
+    else
+      pct=0
+    fi
+    printf "%s %s %s" "$used" "$total" "$pct"
+  else
+    printf "0 0 0"
+  fi
+}
+
+get_disk() {
+  local line
+  if line="$(df -Pk / 2>/dev/null | awk 'NR==2{print $3*1024, $2*1024, $5}' | tr -d '%')"; then
+    echo "$line"
+  else
+    echo "0 0 0"
+  fi
+}
+
+get_procs() {
+  if command -v ps >/dev/null 2>&1; then
+    ps -e 2>/dev/null | wc -l | tr -d ' ' | awk '{print $1-1}'
+  else
+    echo "?"
+  fi
+}
+
+get_users() {
+  who 2>/dev/null | wc -l | tr -d ' ' || echo 0
+}
+
+get_kernel() {
+  uname -sr 2>/dev/null || echo "unknown"
+}
+
+get_ip() {
+  if command -v ip >/dev/null 2>&1; then
+    ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' \
+      || hostname -I 2>/dev/null | awk '{print $1}'
+  elif [[ "$OS" == "darwin" ]]; then
+    ipconfig getifaddr en0 2>/dev/null \
+      || ipconfig getifaddr en1 2>/dev/null \
+      || echo "offline-vibes"
+  else
+    hostname -I 2>/dev/null | awk '{print $1}' || echo "?"
+  fi
+}
+
+ctl_ok() { [[ -x "$CTL" ]]; }
+
+get_brightness_pct() {
+  ctl_ok || { echo "n/a"; return; }
+  local out
+  out="$("$CTL" brightness get 2>/dev/null | tr -d '%')" || { echo "n/a"; return; }
+  [[ "$out" =~ ^[0-9]+$ ]] && echo "$out" || echo "n/a"
+}
+
+get_volume_state() {
+  # prints: pct muted(0|1) or n/a 1
+  ctl_ok || { echo "n/a 1"; return; }
+  local out pct=0 muted=0
+  out="$("$CTL" volume get 2>/dev/null)" || { echo "n/a 1"; return; }
+  if [[ "$out" == "n/a" || -z "$out" ]]; then echo "n/a 1"; return; fi
+  if [[ "$out" == *muted* ]]; then muted=1; fi
+  pct="$(grep -oE '[0-9]+' <<<"$out" | head -1)"
+  echo "${pct:-0} $muted"
+}
+
+mood() {
+  local cpu="$1" mem="$2" disk="$3"
+  if (( cpu >= 90 || mem >= 95 || disk >= 95 )); then
+    echo "${R}panicking quietly${RESET}"
+  elif (( cpu >= 70 || mem >= 80 || disk >= 85 )); then
+    echo "${Y}mildly concerned${RESET}"
+  elif (( cpu < 20 && mem < 40 )); then
+    echo "${G}living its best life${RESET}"
+  else
+    echo "${C}vibing${RESET}"
+  fi
+}
+
+set_flash() {
+  FLASH="$1"
+  FLASH_TTL=3
+}
+
+do_control() {
+  local action="$1"
+  ctl_ok || { set_flash "tash-ctl missing"; return; }
+  local out
+  case "$action" in
+    bright-up)   out="$("$CTL" brightness up 2>&1)" || out="brightness failed" ;;
+    bright-down) out="$("$CTL" brightness down 2>&1)" || out="brightness failed" ;;
+    vol-up)      out="$("$CTL" volume up 2>&1)" || out="volume failed" ;;
+    vol-down)    out="$("$CTL" volume down 2>&1)" || out="volume failed" ;;
+    mute)        out="$("$CTL" volume toggle 2>&1)" || out="mute failed" ;;
+  esac
+  set_flash "$out"
+}
+
+handle_key() {
+  local key="$1"
+  case "$key" in
+    q|Q) cleanup ;;
+    ']') do_control bright-up ;;
+    '[') do_control bright-down ;;
+    '='|'+') do_control vol-up ;;
+    '-'|'_') do_control vol-down ;;
+    m|M) do_control mute ;;
+  esac
+}
+
+draw() {
+  local cpu_pct mem_u mem_t mem_p swap_u swap_t swap_p disk_u disk_t disk_p
+  local load cores model host up kernel ip procs users now
+  local bright_p vol_p vol_m controls_block flash_line hotkeys_hint
+
+  cpu_pct="$(get_cpu_pct)"
+  read -r mem_u mem_t mem_p <<<"$(get_mem)"
+  read -r swap_u swap_t swap_p <<<"$(get_swap)"
+  read -r disk_u disk_t disk_p <<<"$(get_disk)"
+  load="$(get_load)"
+  cores="$(get_cpu_count)"
+  model="$(get_cpu_model)"
+  host="$(get_hostname)"
+  up="$(get_uptime_str)"
+  kernel="$(get_kernel)"
+  ip="$(get_ip)"
+  procs="$(get_procs)"
+  users="$(get_users)"
+  now="$(date '+%Y-%m-%d %H:%M:%S')"
+
+  bright_p="$(get_brightness_pct)"
+  read -r vol_p vol_m <<<"$(get_volume_state)"
+
+  if (( CONTROLS )); then
+    local bbar vbar vlabel
+    if [[ "$bright_p" == "n/a" ]]; then
+      bbar="${D}no backlight device${RESET}"
+    else
+      bbar="$(bar "$bright_p" 36)  ${BOLD}${bright_p}%${RESET}"
+    fi
+    if [[ "$vol_p" == "n/a" ]]; then
+      vbar="${D}no volume backend (apt install alsa-utils)${RESET}"
+      vlabel=""
+    else
+      if (( vol_m )); then
+        vlabel="${R}MUTED${RESET} ${DIM}(${vol_p}%)${RESET}"
+        vbar="$(bar 0 36)  $vlabel"
+      else
+        vbar="$(bar "$vol_p" 36)  ${BOLD}${vol_p}%${RESET}"
+      fi
+    fi
+    controls_block=$(cat <<EOF
+
+  ${BOLD}${C}BRI${RESET}   $bbar
+  ${BOLD}${C}VOL${RESET}   $vbar
+
+  ${DIM}keys  [ ] bright  ·  - = volume  ·  m mute  ·  q quit${RESET}
+  ${DIM}Fn keys need tash-hotkeys (see contrib/debian-minimal/)${RESET}
+EOF
+)
+  else
+    controls_block=""
+  fi
+
+  if (( FLASH_TTL > 0 )) && [[ -n "$FLASH" ]]; then
+    flash_line="  ${Y}➜ ${FLASH}${RESET}"
+    (( FLASH_TTL-- )) || true
+  else
+    flash_line=""
+    FLASH=""
+  fi
+
+  printf '\033[2J\033[H'
+
+  cat <<EOF
+${BOLD}${C}
+  ████████╗ █████╗ ███████╗██╗  ██╗
+  ╚══██╔══╝██╔══██╗██╔════╝██║  ██║
+     ██║   ███████║███████╗███████║
+     ██║   ██╔══██║╚════██║██╔══██║
+     ██║   ██║  ██║███████║██║  ██║
+     ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+${RESET}${DIM}  Terminal Awesome System HUD  ·  judging your hardware since 2026${RESET}
+
+  ${BOLD}${W}${host}${RESET}  ${D}│${RESET}  ${kernel}  ${D}│${RESET}  ${ip:-?}  ${D}│${RESET}  ${now}
+
+  ${BOLD}STATUS${RESET}   $(mood "$cpu_pct" "$mem_p" "$disk_p")
+  ${BOLD}UPTIME${RESET}   ${up}   ${D}(still going — impressive or concerning)${RESET}
+  ${BOLD}LOAD${RESET}     ${load}   ${D}(${cores} cores)${RESET}
+  ${BOLD}USERS${RESET}    ${users} logged in   ${D}│${RESET}  ${BOLD}PROCS${RESET}  ${procs}
+
+  ${BOLD}${B}CPU${RESET}   $(bar "$cpu_pct" 36)  ${BOLD}${cpu_pct}%${RESET}
+        ${DIM}${model}${RESET}
+
+  ${BOLD}${M}MEM${RESET}   $(bar "$mem_p" 36)  ${BOLD}${mem_p}%${RESET}
+        $(human_bytes "$mem_u") used / $(human_bytes "$mem_t")
+
+  ${BOLD}${Y}SWAP${RESET}  $(bar "$swap_p" 36)  ${BOLD}${swap_p}%${RESET}
+        $(human_bytes "$swap_u") used / $(human_bytes "$swap_t")
+
+  ${BOLD}${G}DISK${RESET}  $(bar "$disk_p" 36)  ${BOLD}${disk_p}%${RESET}
+        $(human_bytes "$disk_u") used / $(human_bytes "$disk_t")  ${D}(/ )${RESET}
+${controls_block}
+${flash_line}
+  ${D}refresh ${REFRESH}s  ·  Ctrl+C to flee  ·  tash never sleeps, only refreshes${RESET}
+EOF
+}
+
+cleanup() {
+  stty echo icanon 2>/dev/null || true
+  printf '\033[?25h'
+  echo
+  echo "${DIM}tash out. your secrets are safe. probably.${RESET}"
+  exit 0
+}
+
+trap cleanup INT TERM
+
+printf '\033[?25l'
+
+if [[ "$ONCE" -eq 1 ]]; then
+  draw
+  printf '\033[?25h'
+  exit 0
+fi
+
+# raw-ish tty so single keypresses work without Enter
+stty -echo -icanon time 0 min 0 2>/dev/null || true
+
+while true; do
+  draw
+  # wait up to REFRESH seconds for a key; drain extra bytes from escape seqs
+  if read -r -n 1 -t "$REFRESH" key 2>/dev/null; then
+    # skip escape sequences (arrows etc.)
+    if [[ "$key" == $'\033' ]]; then
+      read -r -n 1 -t 0.01 _ || true
+      read -r -n 1 -t 0.01 _ || true
+      continue
+    fi
+    (( CONTROLS )) && handle_key "$key"
+    # immediate redraw after control
+    [[ "$key" == "q" || "$key" == "Q" ]] || continue
+  fi
+done

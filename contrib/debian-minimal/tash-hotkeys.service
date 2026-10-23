@@ -1,0 +1,18 @@
+[Unit]
+Description=tash Fn/media key daemon (brightness + volume, no DE)
+After=systemd-udev-settle.service sound.target
+Wants=sound.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=input
+SupplementaryGroups=video audio
+ExecStart=/usr/local/bin/tash-hotkeys
+Restart=on-failure
+RestartSec=2
+# Don't grab devices exclusively — share with the console
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+# tash-ctl — brightness / volume / mute for bare Linux (no DE)
+# Works on Debian minimal via sysfs + ALSA (or Pulse/PipeWire when present).
+
+set -euo pipefail
+
+STEP_BRIGHT="${TASH_BRIGHT_STEP:-5}"   # percent
+STEP_VOL="${TASH_VOL_STEP:-5}"         # percent
+
+die() { echo "tash-ctl: $*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+tash-ctl — hardware controls for tash (no desktop required)
+
+Usage:
+  tash-ctl brightness [get|up|down|set <0-100>]
+  tash-ctl volume     [get|up|down|set <0-100>|mute|unmute|toggle]
+  tash-ctl status
+  tash-ctl help
+
+Environment:
+  TASH_BRIGHT_STEP   Brightness step percent (default: 5)
+  TASH_VOL_STEP      Volume step percent (default: 5)
+  TASH_BACKLIGHT     Force backlight device name under /sys/class/backlight
+  TASH_ALSA_CTRL     Force ALSA control name (default: Master, then PCM)
+EOF
+}
+
+# ── backlight ───────────────────────────────────────────────────────────────
+
+find_backlight() {
+  local d best="" best_max=0 max
+  if [[ -n "${TASH_BACKLIGHT:-}" && -d "/sys/class/backlight/$TASH_BACKLIGHT" ]]; then
+    echo "$TASH_BACKLIGHT"
+    return
+  fi
+  # Prefer the backlight with the largest range (usually the real panel)
+  shopt -s nullglob
+  for d in /sys/class/backlight/*; do
+    [[ -r "$d/max_brightness" ]] || continue
+    max="$(cat "$d/max_brightness")"
+    if (( max > best_max )); then
+      best_max=$max
+      best="$(basename "$d")"
+    fi
+  done
+  shopt -u nullglob
+  [[ -n "$best" ]] || return 1
+  echo "$best"
+}
+
+bl_paths() {
+  local name
+  name="$(find_backlight)" || return 1
+  BL_DIR="/sys/class/backlight/$name"
+  BL_CUR="$BL_DIR/brightness"
+  BL_MAX="$BL_DIR/max_brightness"
+  [[ -r "$BL_CUR" && -r "$BL_MAX" ]] || return 1
+}
+
+brightness_get_pct() {
+  bl_paths || { echo "n/a"; return 1; }
+  local cur max pct
+  cur="$(cat "$BL_CUR")"
+  max="$(cat "$BL_MAX")"
+  (( max > 0 )) || { echo 0; return; }
+  pct=$(( (cur * 100 + max / 2) / max ))
+  (( pct > 100 )) && pct=100
+  echo "$pct"
+}
+
+brightness_set_pct() {
+  local pct="${1:?}" cur max new
+  [[ "$pct" =~ ^[0-9]+$ ]] || die "brightness must be 0-100"
+  (( pct > 100 )) && pct=100
+  bl_paths || die "no backlight found under /sys/class/backlight (laptop panel? permissions?)"
+  max="$(cat "$BL_MAX")"
+  new=$(( pct * max / 100 ))
+  (( new < 1 && pct > 0 )) && new=1
+  (( new > max )) && new=$max
+  if [[ -w "$BL_CUR" ]]; then
+    echo "$new" >"$BL_CUR"
+  else
+    # last resort: sudo -n (passwordless) or fail with a hint
+    if sudo -n true 2>/dev/null; then
+      echo "$new" | sudo -n tee "$BL_CUR" >/dev/null
+    else
+      die "cannot write $BL_CUR — run: sudo usermod -aG video \$USER  (or install contrib udev rule), then re-login"
+    fi
+  fi
+  brightness_get_pct
+}
+
+brightness_up() {
+  local pct
+  pct="$(brightness_get_pct)" || die "no backlight"
+  [[ "$pct" == "n/a" ]] && die "no backlight"
+  brightness_set_pct $(( pct + STEP_BRIGHT ))
+}
+
+brightness_down() {
+  local pct
+  pct="$(brightness_get_pct)" || die "no backlight"
+  brightness_set_pct $(( pct - STEP_BRIGHT < 0 ? 0 : pct - STEP_BRIGHT ))
+}
+
+# ── volume ──────────────────────────────────────────────────────────────────
+
+# Prefer PipeWire → Pulse → ALSA
+vol_backend() {
+  if command -v wpctl >/dev/null 2>&1 && wpctl status >/dev/null 2>&1; then
+    echo pipewire
+  elif command -v pactl >/dev/null 2>&1 && pactl info >/dev/null 2>&1; then
+    echo pulse
+  elif command -v amixer >/dev/null 2>&1; then
+    echo alsa
+  else
+    echo none
+  fi
+}
+
+alsa_ctrl() {
+  if [[ -n "${TASH_ALSA_CTRL:-}" ]]; then
+    echo "$TASH_ALSA_CTRL"
+    return
+  fi
+  local c
+  for c in Master PCM Speaker Headphone; do
+    if amixer sget "$c" >/dev/null 2>&1; then
+      echo "$c"
+      return
+    fi
+  done
+  echo Master
+}
+
+volume_get() {
+  # prints: PCT MUTED(0|1)   or  n/a 1 when no backend
+  local be
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire)
+      local line pct muted=0
+      line="$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null)" || { echo "n/a 1"; return; }
+      pct="$(awk '{printf "%d", $2*100}' <<<"$line")"
+      grep -q MUTED <<<"$line" && muted=1
+      echo "$pct $muted"
+      ;;
+    pulse)
+      local pct muted=0
+      pct="$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -oE '[0-9]+%' | head -1 | tr -d '%')"
+      pct="${pct:-0}"
+      [[ "$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null)" == *yes* ]] && muted=1
+      echo "$pct $muted"
+      ;;
+    alsa)
+      local ctrl out pct muted=0
+      ctrl="$(alsa_ctrl)"
+      out="$(amixer sget "$ctrl" 2>/dev/null)" || { echo "n/a 1"; return; }
+      pct="$(grep -oE '\[[0-9]+%\]' <<<"$out" | head -1 | tr -d '[]%')"
+      pct="${pct:-0}"
+      grep -q '\[off\]' <<<"$out" && muted=1
+      echo "$pct $muted"
+      ;;
+    *) echo "n/a 1" ;;
+  esac
+}
+
+volume_set_pct() {
+  local pct="${1:?}" be
+  [[ "$pct" =~ ^[0-9]+$ ]] || die "volume must be 0-100"
+  (( pct > 100 )) && pct=100
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire) wpctl set-volume @DEFAULT_AUDIO_SINK@ "${pct}%" ;;
+    pulse)    pactl set-sink-volume @DEFAULT_SINK@ "${pct}%" ;;
+    alsa)     amixer -q sset "$(alsa_ctrl)" "${pct}%" unmute ;;
+    *) die "no volume backend (install alsa-utils, or use pipewire/pulse)" ;;
+  esac
+  volume_get
+}
+
+volume_up() {
+  local pct muted be
+  read -r pct muted <<<"$(volume_get)"
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire) wpctl set-volume @DEFAULT_AUDIO_SINK@ "${STEP_VOL}%+" ; wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 ;;
+    pulse)    pactl set-sink-volume @DEFAULT_SINK@ "+${STEP_VOL}%" ; pactl set-sink-mute @DEFAULT_SINK@ 0 ;;
+    alsa)     amixer -q sset "$(alsa_ctrl)" "${STEP_VOL}%+" unmute ;;
+    *) die "no volume backend" ;;
+  esac
+  volume_get
+}
+
+volume_down() {
+  local be
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire) wpctl set-volume @DEFAULT_AUDIO_SINK@ "${STEP_VOL}%-" ;;
+    pulse)    pactl set-sink-volume @DEFAULT_SINK@ "-${STEP_VOL}%" ;;
+    alsa)     amixer -q sset "$(alsa_ctrl)" "${STEP_VOL}%-" ;;
+    *) die "no volume backend" ;;
+  esac
+  volume_get
+}
+
+volume_mute_toggle() {
+  local be
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire) wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle ;;
+    pulse)    pactl set-sink-mute @DEFAULT_SINK@ toggle ;;
+    alsa)     amixer -q sset "$(alsa_ctrl)" toggle ;;
+    *) die "no volume backend" ;;
+  esac
+  volume_get
+}
+
+volume_mute() {
+  local be
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire) wpctl set-mute @DEFAULT_AUDIO_SINK@ 1 ;;
+    pulse)    pactl set-sink-mute @DEFAULT_SINK@ 1 ;;
+    alsa)     amixer -q sset "$(alsa_ctrl)" mute ;;
+    *) die "no volume backend" ;;
+  esac
+  volume_get
+}
+
+volume_unmute() {
+  local be
+  be="$(vol_backend)"
+  case "$be" in
+    pipewire) wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 ;;
+    pulse)    pactl set-sink-mute @DEFAULT_SINK@ 0 ;;
+    alsa)     amixer -q sset "$(alsa_ctrl)" unmute ;;
+    *) die "no volume backend" ;;
+  esac
+  volume_get
+}
+
+print_status() {
+  local bp vp vm be bl
+  bp="$(brightness_get_pct 2>/dev/null)" || bp="n/a"
+  [[ -z "$bp" ]] && bp="n/a"
+  read -r vp vm <<<"$(volume_get)"
+  be="$(vol_backend)"
+  bl="$(find_backlight 2>/dev/null || echo none)"
+  if [[ "$bp" == "n/a" ]]; then
+    echo "brightness: n/a  (device: $bl)"
+  else
+    echo "brightness: ${bp}%  (device: $bl)"
+  fi
+  if [[ "$vp" == "n/a" ]]; then
+    echo "volume:     n/a  [backend: $be]"
+  elif (( vm )); then
+    echo "volume:     muted (${vp}%)  [backend: $be]"
+  else
+    echo "volume:     ${vp}%  [backend: $be]"
+  fi
+}
+
+# ── dispatch ────────────────────────────────────────────────────────────────
+
+cmd="${1:-help}"
+sub="${2:-}"
+
+case "$cmd" in
+  help|-h|--help) usage ;;
+  status) print_status ;;
+  brightness|bright|bl)
+    case "${sub:-get}" in
+      get|"")
+        bp="$(brightness_get_pct)" || true
+        [[ "$bp" == "n/a" || -z "$bp" ]] && echo "n/a" || printf '%s%%\n' "$bp"
+        ;;
+      up)     printf '%s%%\n' "$(brightness_up)" ;;
+      down)   printf '%s%%\n' "$(brightness_down)" ;;
+      set)    printf '%s%%\n' "$(brightness_set_pct "${3:?pct}")" ;;
+      *) die "brightness: get|up|down|set <pct>" ;;
+    esac
+    ;;
+  volume|vol)
+    case "${sub:-get}" in
+      get|"")
+        read -r vp vm <<<"$(volume_get)"
+        if [[ "$vp" == "n/a" ]]; then echo "n/a"
+        elif (( vm )); then echo "${vp}% (muted)"
+        else echo "${vp}%"
+        fi
+        ;;
+      up)     volume_up >/dev/null; volume_get | awk '{if($2) print $1"% (muted)"; else print $1"%"}' ;;
+      down)   volume_down >/dev/null; volume_get | awk '{if($2) print $1"% (muted)"; else print $1"%"}' ;;
+      set)    volume_set_pct "${3:?pct}" >/dev/null; volume_get | awk '{if($2) print $1"% (muted)"; else print $1"%"}' ;;
+      mute)   volume_mute >/dev/null; echo muted ;;
+      unmute) volume_unmute >/dev/null; echo unmuted ;;
+      toggle) volume_mute_toggle >/dev/null; read -r vp vm <<<"$(volume_get)"; ((vm)) && echo muted || echo "${vp}%" ;;
+      *) die "volume: get|up|down|set|mute|unmute|toggle" ;;
+    esac
+    ;;
+  *) usage; exit 1 ;;
+esac
