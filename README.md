@@ -122,8 +122,22 @@ sudo systemctl enable --now triggerhappy
 
 - `bash` (we're not picky, but we have standards)
 - Linux for brightness / Fn keys (macOS HUD still works; backlight hotkeys are a Linux plotline)
-- Unicode box-drawing for bars (`━` / `─`) and a 256-color terminal (or `TASH_BASIC_COLOR=1` if your terminal peaked in 1997)
+- A terminal. That's it. Style auto-adapts:
+  - **rich** (modern emulators): soft 256-color + `█`/`░` bars
+  - **minimal** (`TERM=linux` / Debian tty): 16-color ANSI + high-contrast bars
+  - **ascii**: `#`/`-` if UTF-8 is missing
+- Override with `TASH_STYLE=rich|minimal|ascii` or `TASH_BASIC_COLOR=1`
 - For Fn keys: read access to `/dev/input/event*` + `python3` (or triggerhappy)
+
+### Bars look wrong on the raw console?
+
+Debian minimal's Linux console often ignores 256-color codes. Older `━`/`─` bars then looked “flat.” Current `tash` auto-switches to **minimal** style on `TERM=linux`. Force it anytime:
+
+```bash
+TASH_STYLE=minimal ./tash
+# or pure ASCII:
+TASH_STYLE=ascii ./tash
+```
 
 ## Mood guide (know thyself)
 

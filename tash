@@ -48,6 +48,8 @@ Fn / media keys (Debian minimal, no DE):
 Environment:
   TASH_REFRESH        Default refresh interval
   TASH_CTL            Path to tash-ctl
+  TASH_STYLE          auto|rich|minimal|ascii  (auto detects linux console)
+  TASH_BASIC_COLOR=1  Force 16-color ANSI (good for Debian tty)
 EOF
 }
 
@@ -62,31 +64,89 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ── colors (soft 256-color palette when available) ──────────────────────────
+# ── display style (elegant where rich; clear on Debian minimal / tty) ───────
+# TASH_STYLE=auto|rich|minimal|ascii
+# TASH_BASIC_COLOR=1  force 16-color ANSI
+detect_style() {
+  local want="${TASH_STYLE:-auto}"
+  case "$want" in
+    rich|minimal|ascii) echo "$want"; return ;;
+  esac
+  # auto (default): prefer clarity on bare Linux consoles
+  case "${TERM:-}" in
+    dumb|unknown|"") echo ascii; return ;;
+    # Linux virtual console / classic VTs: 16 colors, high-contrast glyphs
+    linux|vt100|vt102|vt220|ansi|cygwin) echo minimal; return ;;
+  esac
+  local loc="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+  if [[ "$loc" != *[Uu][Tt][Ff]?8* && "$loc" != *[Uu][Tt][Ff]-8* ]]; then
+    echo ascii
+    return
+  fi
+  echo rich
+}
+
+STYLE="$(detect_style)"
+
+# Glyphs: bars need high contrast (━/─ look identical without 256-color)
+case "$STYLE" in
+  ascii)
+    BAR_ON='#'
+    BAR_OFF='-'
+    RULE_CH='-'
+    RULE_CORNER='--'
+    DOT='*'
+    PLUG='+'
+    FLASH_MARK='>'
+    ;;
+  minimal)
+    # Block elements are in typical Debian console fonts; clearly readable
+    BAR_ON='█'
+    BAR_OFF='░'
+    RULE_CH='─'
+    RULE_CORNER='──'
+    DOT='·'
+    PLUG='*'
+    FLASH_MARK='>'
+    ;;
+  *)
+    BAR_ON='█'
+    BAR_OFF='░'
+    RULE_CH='─'
+    RULE_CORNER='──'
+    DOT='·'
+    PLUG='⚡'
+    FLASH_MARK='›'
+    ;;
+esac
+
+# Colors: soft 256 on rich terminals; 16-color on linux console / minimal
 if [[ "$NO_COLOR" -eq 1 ]] || [[ ! -t 1 ]]; then
   R= G= Y= B= M= C= W= D= BOLD= DIM= ITAL= RESET=
   ACC= MUTED= SOFT= FG=
-else
+elif [[ "$STYLE" == "rich" && -z "${TASH_BASIC_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'; ITAL=$'\033[3m'; RESET=$'\033[0m'
-  # Prefer muted 256-color tones; fall back to classic ANSI
-  if [[ "${TERM:-}" != "dumb" ]] && [[ -z "${TASH_BASIC_COLOR:-}" ]]; then
-    R=$'\033[38;5;167m'   # soft rose
-    G=$'\033[38;5;108m'   # sage
-    Y=$'\033[38;5;179m'   # warm amber
-    B=$'\033[38;5;110m'   # soft blue
-    M=$'\033[38;5;139m'   # mauve
-    C=$'\033[38;5;73m'    # teal
-    W=$'\033[38;5;253m'   # near-white
-    D=$'\033[38;5;240m'   # charcoal
-    ACC=$'\033[38;5;73m'  # brand accent
-    MUTED=$'\033[38;5;245m'
-    SOFT=$'\033[38;5;250m'
-    FG=$'\033[38;5;252m'
-  else
-    R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'
-    M=$'\033[35m'; C=$'\033[36m'; W=$'\033[37m'; D=$'\033[90m'
-    ACC=$C; MUTED=$D; SOFT=$W; FG=$W
-  fi
+  R=$'\033[38;5;167m'   # soft rose
+  G=$'\033[38;5;108m'   # sage
+  Y=$'\033[38;5;179m'   # warm amber
+  B=$'\033[38;5;110m'   # soft blue
+  M=$'\033[38;5;139m'   # mauve
+  C=$'\033[38;5;73m'    # teal
+  W=$'\033[38;5;253m'   # near-white
+  D=$'\033[38;5;240m'   # charcoal
+  ACC=$'\033[38;5;73m'
+  MUTED=$'\033[38;5;245m'
+  SOFT=$'\033[38;5;250m'
+  FG=$'\033[38;5;252m'
+else
+  # Debian minimal / Linux console: reliable 16-color ANSI
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; ITAL=$'\033[3m'; RESET=$'\033[0m'
+  R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'
+  M=$'\033[35m'; C=$'\033[36m'; W=$'\033[37m'; D=$'\033[90m'
+  ACC=$'\033[36m'
+  MUTED=$'\033[90m'
+  SOFT=$'\033[37m'
+  FG=$'\033[1;37m'
 fi
 
 # Hairline rule (width chars)
@@ -95,12 +155,12 @@ rule() {
   if [[ -n "$label" ]]; then
     local pad=$(( width - ${#label} - 4 ))
     (( pad < 2 )) && pad=2
-    printf "%s── %s " "$D" "$label"
-    for (( i = 0; i < pad; i++ )); do printf "─"; done
+    printf "%s%s %s " "$D" "$RULE_CORNER" "$label"
+    for (( i = 0; i < pad; i++ )); do printf "%s" "$RULE_CH"; done
     printf "%s" "$RESET"
   else
     printf "%s" "$D"
-    for (( i = 0; i < width; i++ )); do printf "─"; done
+    for (( i = 0; i < width; i++ )); do printf "%s" "$RULE_CH"; done
     printf "%s" "$RESET"
   fi
 }
@@ -110,29 +170,42 @@ lbl() {
   printf "%s%-4s%s" "${1:-$MUTED}" "$2" "$RESET"
 }
 
+# High-contrast progress bar. Guarantees a visible tick for 1–99%.
 bar() {
-  local pct="$1" width="${2:-28}" invert="${3:-0}"
-  local filled empty i
+  local pct="${1:-0}" width="${2:-28}" invert="${3:-0}"
+  local filled empty i color
+  # coerce junk / newlines from sysfs
+  pct="${pct%%[!0-9]*}"
+  pct="${pct:-0}"
   (( pct < 0 )) && pct=0
   (( pct > 100 )) && pct=100
+  (( width < 4 )) && width=4
+
   filled=$(( pct * width / 100 ))
   empty=$(( width - filled ))
+  # show level even when integer math would round to an empty/full bar
+  if (( pct > 0 && filled == 0 )); then
+    filled=1
+    empty=$(( width - 1 ))
+  elif (( pct < 100 && empty == 0 )); then
+    filled=$(( width - 1 ))
+    empty=1
+  fi
 
-  local color="$G"
   if (( invert )); then
-    # battery-style: low is bad
     color="$G"
     (( pct <= 30 )) && color="$Y"
     (( pct <= 15 )) && color="$R"
   else
+    color="$G"
     (( pct >= 70 )) && color="$Y"
     (( pct >= 90 )) && color="$R"
   fi
 
   printf "%s" "$color"
-  for (( i = 0; i < filled; i++ )); do printf "━"; done
+  for (( i = 0; i < filled; i++ )); do printf "%s" "$BAR_ON"; done
   printf "%s" "$D"
-  for (( i = 0; i < empty; i++ )); do printf "─"; done
+  for (( i = 0; i < empty; i++ )); do printf "%s" "$BAR_OFF"; done
   printf "%s" "$RESET"
 }
 
@@ -744,23 +817,23 @@ format_battery_line() {
     return
   fi
   case "$status" in
-    Charging)       label="${G}charging${RESET}" ; plug="${Y}⚡${RESET}" ;;
-    Full)           label="${G}full${RESET}" ; plug="${Y}⚡${RESET}" ;;
+    Charging)       label="${G}charging${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
+    Full)           label="${G}full${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
     Discharging)    label="${SOFT}discharging${RESET}" ;;
-    "Not charging") label="${SOFT}plugged${RESET}" ; plug="${Y}⚡${RESET}" ;;
+    "Not charging") label="${SOFT}plugged${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
     *)              label="${MUTED}${status}${RESET}" ;;
   esac
   if [[ "$ac" == "1" && "$status" == "Discharging" ]]; then
-    plug="${Y}⚡${RESET}"
+    plug="${Y}${PLUG}${RESET}"
   fi
   life_h="$(format_duration "$eta_secs")"
   if [[ "$life_h" != "n/a" ]]; then
     case "$eta_kind" in
-      empty) life="${D}  ·  ${RESET}${FG}${life_h}${RESET}${D} left${RESET}" ;;
-      full)  life="${D}  ·  ${RESET}${FG}${life_h}${RESET}${D} to full${RESET}" ;;
+      empty) life="${D}  ${DOT}  ${RESET}${FG}${life_h}${RESET}${D} left${RESET}" ;;
+      full)  life="${D}  ${DOT}  ${RESET}${FG}${life_h}${RESET}${D} to full${RESET}" ;;
     esac
   elif [[ "$status" == "Full" ]]; then
-    life="${D}  ·  ${RESET}${G}topped up${RESET}"
+    life="${D}  ${DOT}  ${RESET}${G}topped up${RESET}"
   fi
   printf "%s  %s%s%%${RESET}%s  %s%s" \
     "$(bar "$pct" 28 1)" "$BOLD$FG" "$pct" "${plug:+ $plug}" "$label" "$life"
@@ -868,7 +941,7 @@ draw() {
   $(rule 56 controls)
   $(lbl "$ACC" "BRI")  $bbar
   $(lbl "$ACC" "VOL")  $vbar
-  ${D}     [ ] bright   − = volume   m mute   q quit${RESET}
+  ${D}     [ ] bright   - = volume   m mute   q quit${RESET}
 EOF
 )
   else
@@ -877,7 +950,7 @@ EOF
 
   if (( FLASH_TTL > 0 )) && [[ -n "$FLASH" ]]; then
     flash_line="
-  ${ACC}›${RESET} ${SOFT}${FLASH}${RESET}"
+  ${ACC}${FLASH_MARK}${RESET} ${SOFT}${FLASH}${RESET}"
     (( FLASH_TTL-- )) || true
   else
     flash_line=""
@@ -898,18 +971,18 @@ EOF
   ${BOLD}${FG}${clock_hms}${RESET}  ${MUTED}${clock_date}${RESET}  ${D}${clock_tz}${RESET}
 
   ${BOLD}${FG}${host}${RESET}
-  ${MUTED}${kernel}${RESET}  ${D}·${RESET}  ${MUTED}${ip:-?}${RESET}
+  ${MUTED}${kernel}${RESET}  ${D}${DOT}${RESET}  ${MUTED}${ip:-?}${RESET}
 
   $(rule 56)
   ${MUTED}mood${RESET}    $mood_line
-  ${MUTED}up${RESET}      ${FG}${up}${RESET}  ${D}·${RESET}  ${MUTED}load${RESET} ${SOFT}${load}${RESET} ${D}(${cores}c)${RESET}
-  ${MUTED}users${RESET}   ${FG}${users}${RESET}  ${D}·${RESET}  ${MUTED}procs${RESET} ${SOFT}${procs}${RESET}
+  ${MUTED}up${RESET}      ${FG}${up}${RESET}  ${D}${DOT}${RESET}  ${MUTED}load${RESET} ${SOFT}${load}${RESET} ${D}(${cores}c)${RESET}
+  ${MUTED}users${RESET}   ${FG}${users}${RESET}  ${D}${DOT}${RESET}  ${MUTED}procs${RESET} ${SOFT}${procs}${RESET}
 
   $(rule 56 power)
   $(lbl "$Y" "BAT")  $bat_line
   $(lbl "$B" "WIFI")  $wifi_line
   $(lbl "$B" "ETH")  $eth_line
-  $(lbl "$MUTED" "NET")  $conn_label  ${D}·${RESET}  ${MUTED}${ip:-?}${RESET}
+  $(lbl "$MUTED" "NET")  $conn_label  ${D}${DOT}${RESET}  ${MUTED}${ip:-?}${RESET}
 
   $(rule 56 resources)
   $(lbl "$B" "CPU")  $(bar "$cpu_pct" 28)  ${FG}${cpu_pct}%${RESET}
@@ -919,7 +992,7 @@ EOF
   $(lbl "$G" "DISK")  $(bar "$disk_p" 28)  ${FG}${disk_p}%${RESET}  $disk_detail
 ${controls_block}${flash_line}
 
-  ${D}refresh ${REFRESH}s  ·  judging quietly since 2026${RESET}
+  ${D}refresh ${REFRESH}s  ${DOT}  judging quietly since 2026${RESET}
 EOF
 }
 
