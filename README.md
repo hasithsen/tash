@@ -122,21 +122,20 @@ sudo systemctl enable --now triggerhappy
 
 - `bash` (we're not picky, but we have standards)
 - Linux for brightness / Fn keys (macOS HUD still works; backlight hotkeys are a Linux plotline)
-- A terminal. That's it. Style auto-adapts:
-  - **rich** (modern emulators): soft 256-color + `█`/`░` bars
-  - **minimal** (`TERM=linux` / Debian tty): 16-color ANSI + high-contrast bars
+- A terminal. That's it. Style auto-adapts for production readability:
+  - **rich** (modern emulators): soft 256-color, calm chrome, `█`/`░` bars
+  - **minimal** (`TERM=linux` / Debian tty): bold 16-color, **no bright-black**, high-contrast bars
   - **ascii**: `#`/`-` if UTF-8 is missing
 - Override with `TASH_STYLE=rich|minimal|ascii` or `TASH_BASIC_COLOR=1`
 - For Fn keys: read access to `/dev/input/event*` + `python3` (or triggerhappy)
 
-### Bars look wrong on the raw console?
+### Hard to read / flat bars on the raw console?
 
-Debian minimal's Linux console often ignores 256-color codes. Older `━`/`─` bars then looked “flat.” Current `tash` auto-switches to **minimal** style on `TERM=linux`. Force it anytime:
+Debian's Linux console often ignores 256-color and paints bright-black (`\033[90m`) as “almost invisible.” `tash` auto-uses **minimal** style on `TERM=linux`: bold cyan/white hierarchy, visible secondary text, high-contrast bars.
 
 ```bash
-TASH_STYLE=minimal ./tash
-# or pure ASCII:
-TASH_STYLE=ascii ./tash
+TASH_STYLE=minimal ./tash   # force console-safe palette
+TASH_STYLE=ascii ./tash     # nuclear option
 ```
 
 ## Mood guide (know thyself)

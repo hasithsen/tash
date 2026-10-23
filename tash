@@ -120,54 +120,69 @@ case "$STYLE" in
     ;;
 esac
 
-# Colors: soft 256 on rich terminals; 16-color on linux console / minimal
+# Colors
+# Tokens: FG primary · SEC secondary · META chrome · ACC brand
+# Linux console: NEVER use bright-black (90) — it vanishes on VGA/fbcon.
 if [[ "$NO_COLOR" -eq 1 ]] || [[ ! -t 1 ]]; then
   R= G= Y= B= M= C= W= D= BOLD= DIM= ITAL= RESET=
-  ACC= MUTED= SOFT= FG=
+  ACC= MUTED= SOFT= FG= SEC= META= BAR_TRACK=
 elif [[ "$STYLE" == "rich" && -z "${TASH_BASIC_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'; ITAL=$'\033[3m'; RESET=$'\033[0m'
-  R=$'\033[38;5;167m'   # soft rose
-  G=$'\033[38;5;108m'   # sage
-  Y=$'\033[38;5;179m'   # warm amber
-  B=$'\033[38;5;110m'   # soft blue
-  M=$'\033[38;5;139m'   # mauve
-  C=$'\033[38;5;73m'    # teal
-  W=$'\033[38;5;253m'   # near-white
-  D=$'\033[38;5;240m'   # charcoal
-  ACC=$'\033[38;5;73m'
-  MUTED=$'\033[38;5;245m'
-  SOFT=$'\033[38;5;250m'
-  FG=$'\033[38;5;252m'
+  R=$'\033[38;5;174m'    # rose
+  G=$'\033[38;5;114m'    # sage (a touch brighter for bars)
+  Y=$'\033[38;5;186m'    # amber
+  B=$'\033[38;5;111m'    # soft blue
+  M=$'\033[38;5;146m'    # mauve
+  C=$'\033[38;5;80m'     # teal
+  W=$'\033[38;5;255m'
+  D=$'\033[38;5;244m'    # lighter charcoal (readable chrome)
+  ACC=$'\033[38;5;80m'
+  MUTED=$'\033[38;5;247m'
+  SOFT=$'\033[38;5;252m'
+  FG=$'\033[38;5;255m'
+  SEC=$'\033[38;5;250m'
+  META=$'\033[38;5;244m'
+  BAR_TRACK=$'\033[38;5;238m'
 else
-  # Debian minimal / Linux console: reliable 16-color ANSI
-  BOLD=$'\033[1m'; DIM=$'\033[2m'; ITAL=$'\033[3m'; RESET=$'\033[0m'
-  R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'
-  M=$'\033[35m'; C=$'\033[36m'; W=$'\033[37m'; D=$'\033[90m'
-  ACC=$'\033[36m'
-  MUTED=$'\033[90m'
-  SOFT=$'\033[37m'
+  # Debian minimal / Linux console — bold 16-color, high contrast
+  # Skip DIM/ITAL (often ignored or muddy). Skip blue-34 (too dark on VGA).
+  BOLD=$'\033[1m'; DIM=; ITAL=; RESET=$'\033[0m'
+  R=$'\033[1;31m'
+  G=$'\033[1;32m'
+  Y=$'\033[1;33m'
+  B=$'\033[1;36m'        # cyan stand-in for blue (readable)
+  M=$'\033[1;35m'
+  C=$'\033[1;36m'
+  W=$'\033[1;37m'
+  D=$'\033[37m'          # white, NOT 90
+  ACC=$'\033[1;36m'
+  MUTED=$'\033[37m'
+  SOFT=$'\033[1;37m'
   FG=$'\033[1;37m'
+  SEC=$'\033[37m'
+  META=$'\033[37m'
+  BAR_TRACK=$'\033[37m'
 fi
 
-# Hairline rule (width chars)
+# Hairline rule (width chars) — uses META so chrome stays visible on tty
 rule() {
   local width="${1:-56}" label="${2:-}" i
   if [[ -n "$label" ]]; then
     local pad=$(( width - ${#label} - 4 ))
     (( pad < 2 )) && pad=2
-    printf "%s%s %s " "$D" "$RULE_CORNER" "$label"
+    printf "%s%s %s%s%s " "$META" "$RULE_CORNER" "$BOLD$ACC" "$label" "$RESET$META"
     for (( i = 0; i < pad; i++ )); do printf "%s" "$RULE_CH"; done
     printf "%s" "$RESET"
   else
-    printf "%s" "$D"
+    printf "%s" "$META"
     for (( i = 0; i < width; i++ )); do printf "%s" "$RULE_CH"; done
     printf "%s" "$RESET"
   fi
 }
 
-# Fixed-width section label
+# Fixed-width section label (always bold for scanability)
 lbl() {
-  printf "%s%-4s%s" "${1:-$MUTED}" "$2" "$RESET"
+  printf "%s%s%-4s%s" "$BOLD" "${1:-$ACC}" "$2" "$RESET"
 }
 
 # High-contrast progress bar. Guarantees a visible tick for 1–99%.
@@ -204,7 +219,7 @@ bar() {
 
   printf "%s" "$color"
   for (( i = 0; i < filled; i++ )); do printf "%s" "$BAR_ON"; done
-  printf "%s" "$D"
+  printf "%s" "$BAR_TRACK"
   for (( i = 0; i < empty; i++ )); do printf "%s" "$BAR_OFF"; done
   printf "%s" "$RESET"
 }
@@ -813,15 +828,15 @@ format_battery_line() {
   local pct="$1" status="$2" ac="$3" eta_secs="${4:-n/a}" eta_kind="${5:-n/a}"
   local label plug="" life="" life_h
   if [[ "$pct" == "n/a" ]]; then
-    echo "${MUTED}no battery${RESET}  ${D}desktop energy${RESET}"
+    echo "${SEC}no battery${RESET}  ${META}desktop energy${RESET}"
     return
   fi
   case "$status" in
     Charging)       label="${G}charging${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
     Full)           label="${G}full${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
-    Discharging)    label="${SOFT}discharging${RESET}" ;;
-    "Not charging") label="${SOFT}plugged${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
-    *)              label="${MUTED}${status}${RESET}" ;;
+    Discharging)    label="${SEC}discharging${RESET}" ;;
+    "Not charging") label="${SEC}plugged${RESET}" ; plug="${Y}${PLUG}${RESET}" ;;
+    *)              label="${SEC}${status}${RESET}" ;;
   esac
   if [[ "$ac" == "1" && "$status" == "Discharging" ]]; then
     plug="${Y}${PLUG}${RESET}"
@@ -829,35 +844,35 @@ format_battery_line() {
   life_h="$(format_duration "$eta_secs")"
   if [[ "$life_h" != "n/a" ]]; then
     case "$eta_kind" in
-      empty) life="${D}  ${DOT}  ${RESET}${FG}${life_h}${RESET}${D} left${RESET}" ;;
-      full)  life="${D}  ${DOT}  ${RESET}${FG}${life_h}${RESET}${D} to full${RESET}" ;;
+      empty) life="${META}  ${DOT}  ${RESET}${BOLD}${FG}${life_h}${RESET}${SEC} left${RESET}" ;;
+      full)  life="${META}  ${DOT}  ${RESET}${BOLD}${FG}${life_h}${RESET}${SEC} to full${RESET}" ;;
     esac
   elif [[ "$status" == "Full" ]]; then
-    life="${D}  ${DOT}  ${RESET}${G}topped up${RESET}"
+    life="${META}  ${DOT}  ${RESET}${G}topped up${RESET}"
   fi
-  printf "%s  %s%s%%${RESET}%s  %s%s" \
-    "$(bar "$pct" 28 1)" "$BOLD$FG" "$pct" "${plug:+ $plug}" "$label" "$life"
+  printf "%s  %s%s%%%s%s  %s%s" \
+    "$(bar "$pct" 28 1)" "$BOLD$FG" "$pct" "$RESET" "${plug:+ $plug}" "$label" "$life"
 }
 
 format_wifi_line() {
   local state="$1" ssid="$2" signal="$3"
   if [[ "$state" == "n/a" ]]; then
-    echo "${MUTED}no interface${RESET}"
+    echo "${SEC}no interface${RESET}"
     return
   fi
   if [[ "$state" != "up" ]]; then
-    echo "${R}disconnected${RESET}  ${D}lonely packets${RESET}"
+    echo "${R}disconnected${RESET}  ${META}lonely packets${RESET}"
     return
   fi
   local pretty sigbit=""
   case "$ssid" in
-    none|unknown|"") pretty="${MUTED}ssid unknown${RESET}${D} — apt install iw${RESET}" ;;
-    *) pretty="${FG}${ssid//_/ }${RESET}" ;;
+    none|unknown|"") pretty="${SEC}ssid unknown${RESET}${META} - apt install iw${RESET}" ;;
+    *) pretty="${BOLD}${FG}${ssid//_/ }${RESET}" ;;
   esac
   if [[ "$signal" =~ ^[0-9]+$ ]]; then
-    sigbit="$(bar "$signal" 12) ${MUTED}${signal}%${RESET}"
+    sigbit="$(bar "$signal" 12) ${SEC}${signal}%${RESET}"
   else
-    sigbit="${D}signal —${RESET}"
+    sigbit="${META}signal -${RESET}"
   fi
   echo "${G}connected${RESET}  $pretty  $sigbit"
 }
@@ -865,13 +880,13 @@ format_wifi_line() {
 format_eth_line() {
   local state="$1" iface="$2" ipaddr="$3"
   if [[ "$state" == "n/a" || "$iface" == "none" ]]; then
-    echo "${MUTED}none${RESET}"
+    echo "${SEC}none${RESET}"
     return
   fi
   if [[ "$state" == "up" ]]; then
-    echo "${G}up${RESET}  ${FG}${iface}${RESET}  ${MUTED}${ipaddr}${RESET}"
+    echo "${G}up${RESET}  ${BOLD}${FG}${iface}${RESET}  ${SEC}${ipaddr}${RESET}"
   else
-    echo "${MUTED}down${RESET}  ${D}${iface}${RESET}"
+    echo "${SEC}down${RESET}  ${META}${iface}${RESET}"
   fi
 }
 
@@ -917,23 +932,23 @@ draw() {
   case "$net_conn" in
     online)  conn_label="${G}online${RESET}" ;;
     offline) conn_label="${R}offline${RESET}" ;;
-    *)       conn_label="${D}unknown${RESET}" ;;
+    *)       conn_label="${SEC}unknown${RESET}" ;;
   esac
 
   if (( CONTROLS )); then
     local bbar vbar
     if [[ "$bright_p" == "n/a" ]]; then
-      bbar="${MUTED}no backlight${RESET}"
+      bbar="${SEC}no backlight${RESET}"
     else
-      bbar="$(bar "$bright_p" 28)  ${FG}${bright_p}%${RESET}"
+      bbar="$(bar "$bright_p" 28)  ${BOLD}${FG}${bright_p}%${RESET}"
     fi
     if [[ "$vol_p" == "n/a" ]]; then
-      vbar="${MUTED}no volume backend${RESET}${D} — alsa-utils${RESET}"
+      vbar="${SEC}no volume backend${RESET}${META} - alsa-utils${RESET}"
     else
       if (( vol_m )); then
-        vbar="$(bar 0 28)  ${R}muted${RESET} ${D}(${vol_p}%)${RESET}"
+        vbar="$(bar 0 28)  ${R}muted${RESET} ${SEC}(${vol_p}%)${RESET}"
       else
-        vbar="$(bar "$vol_p" 28)  ${FG}${vol_p}%${RESET}"
+        vbar="$(bar "$vol_p" 28)  ${BOLD}${FG}${vol_p}%${RESET}"
       fi
     fi
     controls_block=$(cat <<EOF
@@ -941,7 +956,7 @@ draw() {
   $(rule 56 controls)
   $(lbl "$ACC" "BRI")  $bbar
   $(lbl "$ACC" "VOL")  $vbar
-  ${D}     [ ] bright   - = volume   m mute   q quit${RESET}
+  ${SEC}     [ ] bright   - = volume   m mute   q quit${RESET}
 EOF
 )
   else
@@ -950,7 +965,7 @@ EOF
 
   if (( FLASH_TTL > 0 )) && [[ -n "$FLASH" ]]; then
     flash_line="
-  ${ACC}${FLASH_MARK}${RESET} ${SOFT}${FLASH}${RESET}"
+  ${BOLD}${ACC}${FLASH_MARK}${RESET} ${FG}${FLASH}${RESET}"
     (( FLASH_TTL-- )) || true
   else
     flash_line=""
@@ -959,40 +974,40 @@ EOF
 
   local mood_line mem_detail swap_detail disk_detail
   mood_line="$(mood "$cpu_pct" "$mem_p" "$disk_p")"
-  mem_detail="${MUTED}$(human_bytes "$mem_u")${RESET}${D} / ${RESET}${MUTED}$(human_bytes "$mem_t")${RESET}"
-  swap_detail="${MUTED}$(human_bytes "$swap_u")${RESET}${D} / ${RESET}${MUTED}$(human_bytes "$swap_t")${RESET}"
-  disk_detail="${MUTED}$(human_bytes "$disk_u")${RESET}${D} / ${RESET}${MUTED}$(human_bytes "$disk_t")${RESET}${D}  /${RESET}"
+  mem_detail="${SEC}$(human_bytes "$mem_u")${RESET}${META} / ${RESET}${SEC}$(human_bytes "$mem_t")${RESET}"
+  swap_detail="${SEC}$(human_bytes "$swap_u")${RESET}${META} / ${RESET}${SEC}$(human_bytes "$swap_t")${RESET}"
+  disk_detail="${SEC}$(human_bytes "$disk_u")${RESET}${META} / ${RESET}${SEC}$(human_bytes "$disk_t")${RESET}${META}  /${RESET}"
 
   printf '\033[2J\033[H'
 
   cat <<EOF
 
-  ${BOLD}${ACC}tash${RESET}  ${D}terminal awesome system hud${RESET}
-  ${BOLD}${FG}${clock_hms}${RESET}  ${MUTED}${clock_date}${RESET}  ${D}${clock_tz}${RESET}
+  ${BOLD}${ACC}tash${RESET}  ${SEC}terminal awesome system hud${RESET}
+  ${BOLD}${FG}${clock_hms}${RESET}  ${SEC}${clock_date}${RESET}  ${META}${clock_tz}${RESET}
 
   ${BOLD}${FG}${host}${RESET}
-  ${MUTED}${kernel}${RESET}  ${D}${DOT}${RESET}  ${MUTED}${ip:-?}${RESET}
+  ${SEC}${kernel}${RESET}  ${META}${DOT}${RESET}  ${SEC}${ip:-?}${RESET}
 
   $(rule 56)
-  ${MUTED}mood${RESET}    $mood_line
-  ${MUTED}up${RESET}      ${FG}${up}${RESET}  ${D}${DOT}${RESET}  ${MUTED}load${RESET} ${SOFT}${load}${RESET} ${D}(${cores}c)${RESET}
-  ${MUTED}users${RESET}   ${FG}${users}${RESET}  ${D}${DOT}${RESET}  ${MUTED}procs${RESET} ${SOFT}${procs}${RESET}
+  ${BOLD}${ACC}mood${RESET}   $mood_line
+  ${BOLD}${ACC}up${RESET}     ${FG}${up}${RESET}  ${META}${DOT}${RESET}  ${BOLD}${ACC}load${RESET} ${FG}${load}${RESET} ${SEC}(${cores}c)${RESET}
+  ${BOLD}${ACC}users${RESET}  ${FG}${users}${RESET}  ${META}${DOT}${RESET}  ${BOLD}${ACC}procs${RESET} ${FG}${procs}${RESET}
 
   $(rule 56 power)
   $(lbl "$Y" "BAT")  $bat_line
   $(lbl "$B" "WIFI")  $wifi_line
   $(lbl "$B" "ETH")  $eth_line
-  $(lbl "$MUTED" "NET")  $conn_label  ${D}${DOT}${RESET}  ${MUTED}${ip:-?}${RESET}
+  $(lbl "$ACC" "NET")  $conn_label  ${META}${DOT}${RESET}  ${SEC}${ip:-?}${RESET}
 
   $(rule 56 resources)
-  $(lbl "$B" "CPU")  $(bar "$cpu_pct" 28)  ${FG}${cpu_pct}%${RESET}
-       ${D}${model}${RESET}
-  $(lbl "$M" "MEM")  $(bar "$mem_p" 28)  ${FG}${mem_p}%${RESET}  $mem_detail
-  $(lbl "$Y" "SWAP")  $(bar "$swap_p" 28)  ${FG}${swap_p}%${RESET}  $swap_detail
-  $(lbl "$G" "DISK")  $(bar "$disk_p" 28)  ${FG}${disk_p}%${RESET}  $disk_detail
+  $(lbl "$B" "CPU")  $(bar "$cpu_pct" 28)  ${BOLD}${FG}${cpu_pct}%${RESET}
+       ${SEC}${model}${RESET}
+  $(lbl "$M" "MEM")  $(bar "$mem_p" 28)  ${BOLD}${FG}${mem_p}%${RESET}  $mem_detail
+  $(lbl "$Y" "SWAP")  $(bar "$swap_p" 28)  ${BOLD}${FG}${swap_p}%${RESET}  $swap_detail
+  $(lbl "$G" "DISK")  $(bar "$disk_p" 28)  ${BOLD}${FG}${disk_p}%${RESET}  $disk_detail
 ${controls_block}${flash_line}
 
-  ${D}refresh ${REFRESH}s  ${DOT}  judging quietly since 2026${RESET}
+  ${META}refresh ${REFRESH}s  ${DOT}  style ${STYLE}${RESET}
 EOF
 }
 
@@ -1015,7 +1030,7 @@ cleanup() {
   # Only print goodbye when we actually ran the interactive UI
   if [[ -n "$STTY_SAVE" ]]; then
     echo
-    echo "${D}tash out.${RESET} ${MUTED}your secrets are safe. probably.${RESET}"
+    echo "${SEC}tash out.${RESET} ${META}your secrets are safe. probably.${RESET}"
   fi
 }
 
