@@ -2,10 +2,11 @@
 
 **T**erminal **A**wesome **S**ystem **H**UD
 
-> People who run `tash` are not better humans.  
-> They just know their battery has 2h 14m left, their mood is *vibing*, and their Fn keys work on a bare Debian console.  
-> From a distance, that is indistinguishable from awesome.  
-> Up close, it *is* awesome. We’re not taking questions.
+> Somewhere, right now, a person is typing `htop` with two fingers like they’re defusing a bomb.  
+> Somewhere else, a person runs `./tash`, watches the teal land, murmurs *vibing*, and dims the backlight with an Fn key on a Debian box that has never known GNOME.  
+>
+> Only one of these people is awesome.  
+> We are not subtle about which one.
 
 ```
   ████████╗ █████╗ ███████╗██╗  ██╗
@@ -16,21 +17,26 @@
      ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 ```
 
-## Why the awesome ones open a terminal
+## The pitch (said with a straight face)
 
-You don’t need a standing desk or a second monitor that plays rain sounds.  
-You need a dashboard that looks you in the eye and says *you’re fine* — or, more often, *buy RAM*.
+`tash` is a live system HUD for people who want their laptop to confess.
 
-`tash` is that dashboard. Live. Judgmental. Weirdly calming.
+Not a lifestyle. Not a morning routine.  
+Just a terminal full of bars, a mood that roast-validates you, and the quiet confidence of knowing your battery has **2h 14m left** while everyone else is still opening Settings.
 
-- **Mood** that roast-validates your life (`living its best life` → `panicking quietly`)
-- **Battery % + time left / to full** — because a naked percentage is emotional neglect
-- **Clock, Wi‑Fi, ethernet, online/offline** — one screen, zero shame-Googling
-- **CPU, memory, swap, disk** with bars that go amber in denial and red when the silicon wants a lawyer
-- **Brightness + volume** from the HUD *and* real **Fn keys** on Debian minimal (no desktop, no GNOME, no mercy)
+Run it once and you join the set of humans who:
+
+- check **mood** the way normals check the weather  
+- treat **Wi‑Fi / ethernet / clock / load** as one glance, not a scavenger hunt  
+- read **battery life**, not just a lonely percentage doing improv  
+- turn the panel up and the speakers down without leaving the HUD — and on bare metal Debian, with **actual Fn keys**  
+- notice when the bars go amber (denial) or red (the silicon has retained counsel)
+
+Your friends reboot “just to see.”  
+You refresh. That’s the whole personality upgrade.
 
 It will not fix your sleep schedule.  
-It will tell you your swap is sad. Awesome people want to know.
+It will tell you your swap is crying. Awesome people prefer the truth.
 
 ## Quick start
 
@@ -39,7 +45,8 @@ chmod +x tash tash-ctl tash-hotkeys
 ./tash
 ```
 
-That’s the whole ritual. The cursor blinks. The teal wordmark lands. You become someone who knows what their machine is doing.
+Cursor blinks. Screen clears. Teal wordmark.  
+You now know things. This is widely considered a symptom of being awesome.
 
 | Command | What happens |
 |---------|----------------|
