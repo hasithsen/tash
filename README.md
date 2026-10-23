@@ -18,29 +18,27 @@
 
 ## The story
 
-There was a laptop.
+You bought a laptop and removed the desktop “for purity.”
 
-Debian minimal. No wallpaper, no widgets, no cheerful battery pill in the corner — only a cursor, blinking with the patience of something that had already forgiven you once today. You had installed it for focus. Focus, you discovered, sounded a lot like a fan explaining thermodynamics at length.
+What remained was Debian minimal: a cursor, a fan with strong opinions, and the spiritual emptiness where the battery icon used to live. You told friends you were “closer to the metal.” The metal did not text back.
 
-You pressed Fn and asked for light. The laptop declined, politely, by doing nothing.  
-You asked for quieter speakers. Same answer, same silence.  
-Somewhere under `/sys`, the backlight waited like an unanswered letter.
+At 1:14 a.m. the fans rose to a pitch normally reserved for takeoff. Was it Chrome? A compile? God? You pressed Fn+brightness. The universe filed your request under *decorative*. You pressed Fn+volume. The speakers continued their career as modern art — present, silent, expensive-looking.
 
-So you did the dignified thing. You opened more terminals. `top`. `htop`. `free -h`. `ip a`. A browser tab from 2017 that began, with tragic confidence, “simply run…” You still could not tell whether the Wi‑Fi was up or merely resting its eyes.
+So you opened terminals the way some people open snacks. `top`. `htop`. `free -h`. `df -h`. `ip a`. A wiki page last edited during the Obama administration that began “simply…” You still could not tell if Wi‑Fi was connected or merely *thinking* about connecting, which is worse.
 
-Then — from a friend, a stranger, or a raccoon who knew `sudo` — came three letters and a habit: try `tash`.
+A voice (friend / stranger / raccoon with `sudo` — eyewitnesses disagree) said: run `tash`.
 
-You typed `./tash`.
+You typed `./tash` the way people type passwords when the barista is watching.
 
-The screen drew a breath. A teal wordmark settled as if it belonged there. Bars arrived without apology. The mood read *mildly concerned*; you closed one Electron window you had been pretending not to see; the mood became *vibing*. Battery: **81%**, **2h 14m left**. The network was, in fact, connected. Later, with `tash-hotkeys`, the Fn row returned from whatever sabbatical it had been on since the desktop went away.
+The screen cleared like it had been waiting for an excuse. Teal. Bars. Mood: *mildly concerned*. You closed the Electron app you’d been calling “research.” Mood: *vibing*. Battery: **81%** · **2h 14m left**. Wi‑Fi: yes, actually. Later you installed `tash-hotkeys`, and the Fn row returned from lunch — a lunch that had, to be fair, started in 2019 when GNOME left the building.
 
 You sat back.
 
-Nothing mystical had occurred. You were not richer, not taller, not suddenly fluent in French.  
-You were, however, **awesome** — which is what we call a person who knows how their laptop is doing and can dim the screen without leaving the story.
+You had not learned French. You had not fixed your sleep. You had not become a better person in any way HR would recognize.  
+You had become **awesome**: the rare state of knowing how your laptop is doing *and* being able to dim it without leaving the plot.
 
-The fan softened. The cursor kept blinking, a little prouder.  
-Across town, someone double-clicked Task Manager and felt, without knowing why, that they were late to something.
+The fan took a breath. The cursor blinked, smug.  
+Somewhere, a Task Manager double-click missed its mark, and its human felt mysteriously behind.
 
 ## What `tash` is
 
