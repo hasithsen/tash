@@ -62,17 +62,56 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ── colors ──────────────────────────────────────────────────────────────────
+# ── colors (soft 256-color palette when available) ──────────────────────────
 if [[ "$NO_COLOR" -eq 1 ]] || [[ ! -t 1 ]]; then
-  R= G= Y= B= M= C= W= D= BOLD= DIM= RESET=
+  R= G= Y= B= M= C= W= D= BOLD= DIM= ITAL= RESET=
+  ACC= MUTED= SOFT= FG=
 else
-  R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'
-  M=$'\033[35m'; C=$'\033[36m'; W=$'\033[37m'; D=$'\033[90m'
-  BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; ITAL=$'\033[3m'; RESET=$'\033[0m'
+  # Prefer muted 256-color tones; fall back to classic ANSI
+  if [[ "${TERM:-}" != "dumb" ]] && [[ -z "${TASH_BASIC_COLOR:-}" ]]; then
+    R=$'\033[38;5;167m'   # soft rose
+    G=$'\033[38;5;108m'   # sage
+    Y=$'\033[38;5;179m'   # warm amber
+    B=$'\033[38;5;110m'   # soft blue
+    M=$'\033[38;5;139m'   # mauve
+    C=$'\033[38;5;73m'    # teal
+    W=$'\033[38;5;253m'   # near-white
+    D=$'\033[38;5;240m'   # charcoal
+    ACC=$'\033[38;5;73m'  # brand accent
+    MUTED=$'\033[38;5;245m'
+    SOFT=$'\033[38;5;250m'
+    FG=$'\033[38;5;252m'
+  else
+    R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'
+    M=$'\033[35m'; C=$'\033[36m'; W=$'\033[37m'; D=$'\033[90m'
+    ACC=$C; MUTED=$D; SOFT=$W; FG=$W
+  fi
 fi
 
+# Hairline rule (width chars)
+rule() {
+  local width="${1:-56}" label="${2:-}" i
+  if [[ -n "$label" ]]; then
+    local pad=$(( width - ${#label} - 4 ))
+    (( pad < 2 )) && pad=2
+    printf "%s── %s " "$D" "$label"
+    for (( i = 0; i < pad; i++ )); do printf "─"; done
+    printf "%s" "$RESET"
+  else
+    printf "%s" "$D"
+    for (( i = 0; i < width; i++ )); do printf "─"; done
+    printf "%s" "$RESET"
+  fi
+}
+
+# Fixed-width section label
+lbl() {
+  printf "%s%-4s%s" "${1:-$MUTED}" "$2" "$RESET"
+}
+
 bar() {
-  local pct="$1" width="${2:-30}"
+  local pct="$1" width="${2:-28}" invert="${3:-0}"
   local filled empty i
   (( pct < 0 )) && pct=0
   (( pct > 100 )) && pct=100
@@ -80,13 +119,20 @@ bar() {
   empty=$(( width - filled ))
 
   local color="$G"
-  (( pct >= 70 )) && color="$Y"
-  (( pct >= 90 )) && color="$R"
+  if (( invert )); then
+    # battery-style: low is bad
+    color="$G"
+    (( pct <= 30 )) && color="$Y"
+    (( pct <= 15 )) && color="$R"
+  else
+    (( pct >= 70 )) && color="$Y"
+    (( pct >= 90 )) && color="$R"
+  fi
 
   printf "%s" "$color"
-  for (( i = 0; i < filled; i++ )); do printf "█"; done
+  for (( i = 0; i < filled; i++ )); do printf "━"; done
   printf "%s" "$D"
-  for (( i = 0; i < empty; i++ )); do printf "░"; done
+  for (( i = 0; i < empty; i++ )); do printf "─"; done
   printf "%s" "$RESET"
 }
 
@@ -694,61 +740,51 @@ format_battery_line() {
   local pct="$1" status="$2" ac="$3" eta_secs="${4:-n/a}" eta_kind="${5:-n/a}"
   local label plug="" life="" life_h
   if [[ "$pct" == "n/a" ]]; then
-    echo "${D}no battery (desktop energy)${RESET}"
+    echo "${MUTED}no battery${RESET}  ${D}desktop energy${RESET}"
     return
   fi
   case "$status" in
-    Charging)    label="${G}charging${RESET}" ; plug=" ⚡" ;;
-    Full)        label="${G}full${RESET}" ; plug=" ⚡" ;;
-    Discharging) label="${Y}discharging${RESET}" ;;
-    "Not charging") label="${Y}plugged${RESET}" ; plug=" ⚡" ;;
-    *)           label="${D}${status}${RESET}" ;;
+    Charging)       label="${G}charging${RESET}" ; plug="${Y}⚡${RESET}" ;;
+    Full)           label="${G}full${RESET}" ; plug="${Y}⚡${RESET}" ;;
+    Discharging)    label="${SOFT}discharging${RESET}" ;;
+    "Not charging") label="${SOFT}plugged${RESET}" ; plug="${Y}⚡${RESET}" ;;
+    *)              label="${MUTED}${status}${RESET}" ;;
   esac
   if [[ "$ac" == "1" && "$status" == "Discharging" ]]; then
-    plug=" ⚡"
+    plug="${Y}⚡${RESET}"
   fi
   life_h="$(format_duration "$eta_secs")"
   if [[ "$life_h" != "n/a" ]]; then
     case "$eta_kind" in
-      empty) life="  ${D}·${RESET}  ${BOLD}${life_h}${RESET} ${D}left${RESET}" ;;
-      full)  life="  ${D}·${RESET}  ${BOLD}${life_h}${RESET} ${D}to full${RESET}" ;;
+      empty) life="${D}  ·  ${RESET}${FG}${life_h}${RESET}${D} left${RESET}" ;;
+      full)  life="${D}  ·  ${RESET}${FG}${life_h}${RESET}${D} to full${RESET}" ;;
     esac
   elif [[ "$status" == "Full" ]]; then
-    life="  ${D}·${RESET}  ${G}topped up${RESET}"
+    life="${D}  ·  ${RESET}${G}topped up${RESET}"
   fi
-  # invert bar colors: low battery = red
-  local color="$G"
-  (( pct <= 30 )) && color="$Y"
-  (( pct <= 15 )) && color="$R"
-  local filled empty i width=36
-  filled=$(( pct * width / 100 ))
-  empty=$(( width - filled ))
-  printf "%s" "$color"
-  for (( i = 0; i < filled; i++ )); do printf "█"; done
-  printf "%s" "$D"
-  for (( i = 0; i < empty; i++ )); do printf "░"; done
-  printf "%s  ${BOLD}%s%%%s${RESET}  %s%s" "$RESET" "$pct" "$plug" "$label" "$life"
+  printf "%s  %s%s%%${RESET}%s  %s%s" \
+    "$(bar "$pct" 28 1)" "$BOLD$FG" "$pct" "${plug:+ $plug}" "$label" "$life"
 }
 
 format_wifi_line() {
   local state="$1" ssid="$2" signal="$3"
   if [[ "$state" == "n/a" ]]; then
-    echo "${D}no wifi interface${RESET}"
+    echo "${MUTED}no interface${RESET}"
     return
   fi
   if [[ "$state" != "up" ]]; then
-    echo "${R}disconnected${RESET}  ${D}(lonely packets)${RESET}"
+    echo "${R}disconnected${RESET}  ${D}lonely packets${RESET}"
     return
   fi
   local pretty sigbit=""
   case "$ssid" in
-    none|unknown|"") pretty="${D}(ssid unknown — apt install iw)${RESET}" ;;
-    *) pretty="${BOLD}${ssid//_/ }${RESET}" ;;
+    none|unknown|"") pretty="${MUTED}ssid unknown${RESET}${D} — apt install iw${RESET}" ;;
+    *) pretty="${FG}${ssid//_/ }${RESET}" ;;
   esac
   if [[ "$signal" =~ ^[0-9]+$ ]]; then
-    sigbit="$(bar "$signal" 16)  ${signal}%"
+    sigbit="$(bar "$signal" 12) ${MUTED}${signal}%${RESET}"
   else
-    sigbit="${D}signal n/a${RESET}"
+    sigbit="${D}signal —${RESET}"
   fi
   echo "${G}connected${RESET}  $pretty  $sigbit"
 }
@@ -756,13 +792,13 @@ format_wifi_line() {
 format_eth_line() {
   local state="$1" iface="$2" ipaddr="$3"
   if [[ "$state" == "n/a" || "$iface" == "none" ]]; then
-    echo "${D}no ethernet${RESET}"
+    echo "${MUTED}none${RESET}"
     return
   fi
   if [[ "$state" == "up" ]]; then
-    echo "${G}up${RESET}  ${iface}  ${ipaddr}"
+    echo "${G}up${RESET}  ${FG}${iface}${RESET}  ${MUTED}${ipaddr}${RESET}"
   else
-    echo "${D}down${RESET}  ${iface}"
+    echo "${MUTED}down${RESET}  ${D}${iface}${RESET}"
   fi
 }
 
@@ -812,30 +848,27 @@ draw() {
   esac
 
   if (( CONTROLS )); then
-    local bbar vbar vlabel
+    local bbar vbar
     if [[ "$bright_p" == "n/a" ]]; then
-      bbar="${D}no backlight device${RESET}"
+      bbar="${MUTED}no backlight${RESET}"
     else
-      bbar="$(bar "$bright_p" 36)  ${BOLD}${bright_p}%${RESET}"
+      bbar="$(bar "$bright_p" 28)  ${FG}${bright_p}%${RESET}"
     fi
     if [[ "$vol_p" == "n/a" ]]; then
-      vbar="${D}no volume backend (apt install alsa-utils)${RESET}"
-      vlabel=""
+      vbar="${MUTED}no volume backend${RESET}${D} — alsa-utils${RESET}"
     else
       if (( vol_m )); then
-        vlabel="${R}MUTED${RESET} ${DIM}(${vol_p}%)${RESET}"
-        vbar="$(bar 0 36)  $vlabel"
+        vbar="$(bar 0 28)  ${R}muted${RESET} ${D}(${vol_p}%)${RESET}"
       else
-        vbar="$(bar "$vol_p" 36)  ${BOLD}${vol_p}%${RESET}"
+        vbar="$(bar "$vol_p" 28)  ${FG}${vol_p}%${RESET}"
       fi
     fi
     controls_block=$(cat <<EOF
 
-  ${BOLD}${C}BRI${RESET}   $bbar
-  ${BOLD}${C}VOL${RESET}   $vbar
-
-  ${DIM}keys  [ ] bright  ·  - = volume  ·  m mute  ·  q quit${RESET}
-  ${DIM}Fn keys need tash-hotkeys (see contrib/debian-minimal/)${RESET}
+  $(rule 56 controls)
+  $(lbl "$ACC" "BRI")  $bbar
+  $(lbl "$ACC" "VOL")  $vbar
+  ${D}     [ ] bright   − = volume   m mute   q quit${RESET}
 EOF
 )
   else
@@ -843,51 +876,50 @@ EOF
   fi
 
   if (( FLASH_TTL > 0 )) && [[ -n "$FLASH" ]]; then
-    flash_line="  ${Y}➜ ${FLASH}${RESET}"
+    flash_line="
+  ${ACC}›${RESET} ${SOFT}${FLASH}${RESET}"
     (( FLASH_TTL-- )) || true
   else
     flash_line=""
     FLASH=""
   fi
 
+  local mood_line mem_detail swap_detail disk_detail
+  mood_line="$(mood "$cpu_pct" "$mem_p" "$disk_p")"
+  mem_detail="${MUTED}$(human_bytes "$mem_u")${RESET}${D} / ${RESET}${MUTED}$(human_bytes "$mem_t")${RESET}"
+  swap_detail="${MUTED}$(human_bytes "$swap_u")${RESET}${D} / ${RESET}${MUTED}$(human_bytes "$swap_t")${RESET}"
+  disk_detail="${MUTED}$(human_bytes "$disk_u")${RESET}${D} / ${RESET}${MUTED}$(human_bytes "$disk_t")${RESET}${D}  /${RESET}"
+
   printf '\033[2J\033[H'
 
   cat <<EOF
-${BOLD}${C}
-  ████████╗ █████╗ ███████╗██╗  ██╗
-  ╚══██╔══╝██╔══██╗██╔════╝██║  ██║
-     ██║   ███████║███████╗███████║
-     ██║   ██╔══██║╚════██║██╔══██║
-     ██║   ██║  ██║███████║██║  ██║
-     ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-${RESET}${DIM}  Terminal Awesome System HUD  ·  judging your hardware since 2026${RESET}
 
-  ${BOLD}${W}${host}${RESET}  ${D}│${RESET}  ${kernel}  ${D}│${RESET}  ${ip:-?}
+  ${BOLD}${ACC}tash${RESET}  ${D}terminal awesome system hud${RESET}
+  ${BOLD}${FG}${clock_hms}${RESET}  ${MUTED}${clock_date}${RESET}  ${D}${clock_tz}${RESET}
 
-  ${BOLD}${W}TIME${RESET}   ${BOLD}${clock_hms}${RESET}  ${D}${clock_date}  ${clock_tz}${RESET}
-  ${BOLD}STATUS${RESET}   $(mood "$cpu_pct" "$mem_p" "$disk_p")
-  ${BOLD}UPTIME${RESET}   ${up}   ${D}│${RESET}  ${BOLD}LOAD${RESET}  ${load}  ${D}(${cores} cores)${RESET}
-  ${BOLD}USERS${RESET}    ${users} logged in   ${D}│${RESET}  ${BOLD}PROCS${RESET}  ${procs}
+  ${BOLD}${FG}${host}${RESET}
+  ${MUTED}${kernel}${RESET}  ${D}·${RESET}  ${MUTED}${ip:-?}${RESET}
 
-  ${BOLD}${Y}BAT${RESET}   $bat_line
-  ${BOLD}${B}WIFI${RESET}  $wifi_line
-  ${BOLD}${B}ETH${RESET}   $eth_line
-  ${BOLD}NET${RESET}    $conn_label  ${D}│${RESET}  ip ${ip:-?}
+  $(rule 56)
+  ${MUTED}mood${RESET}    $mood_line
+  ${MUTED}up${RESET}      ${FG}${up}${RESET}  ${D}·${RESET}  ${MUTED}load${RESET} ${SOFT}${load}${RESET} ${D}(${cores}c)${RESET}
+  ${MUTED}users${RESET}   ${FG}${users}${RESET}  ${D}·${RESET}  ${MUTED}procs${RESET} ${SOFT}${procs}${RESET}
 
-  ${BOLD}${B}CPU${RESET}   $(bar "$cpu_pct" 36)  ${BOLD}${cpu_pct}%${RESET}
-        ${DIM}${model}${RESET}
+  $(rule 56 power)
+  $(lbl "$Y" "BAT")  $bat_line
+  $(lbl "$B" "WIFI")  $wifi_line
+  $(lbl "$B" "ETH")  $eth_line
+  $(lbl "$MUTED" "NET")  $conn_label  ${D}·${RESET}  ${MUTED}${ip:-?}${RESET}
 
-  ${BOLD}${M}MEM${RESET}   $(bar "$mem_p" 36)  ${BOLD}${mem_p}%${RESET}
-        $(human_bytes "$mem_u") used / $(human_bytes "$mem_t")
+  $(rule 56 resources)
+  $(lbl "$B" "CPU")  $(bar "$cpu_pct" 28)  ${FG}${cpu_pct}%${RESET}
+       ${D}${model}${RESET}
+  $(lbl "$M" "MEM")  $(bar "$mem_p" 28)  ${FG}${mem_p}%${RESET}  $mem_detail
+  $(lbl "$Y" "SWAP")  $(bar "$swap_p" 28)  ${FG}${swap_p}%${RESET}  $swap_detail
+  $(lbl "$G" "DISK")  $(bar "$disk_p" 28)  ${FG}${disk_p}%${RESET}  $disk_detail
+${controls_block}${flash_line}
 
-  ${BOLD}${Y}SWAP${RESET}  $(bar "$swap_p" 36)  ${BOLD}${swap_p}%${RESET}
-        $(human_bytes "$swap_u") used / $(human_bytes "$swap_t")
-
-  ${BOLD}${G}DISK${RESET}  $(bar "$disk_p" 36)  ${BOLD}${disk_p}%${RESET}
-        $(human_bytes "$disk_u") used / $(human_bytes "$disk_t")  ${D}(/ )${RESET}
-${controls_block}
-${flash_line}
-  ${D}refresh ${REFRESH}s  ·  Ctrl+C to flee  ·  tash never sleeps, only refreshes${RESET}
+  ${D}refresh ${REFRESH}s  ·  judging quietly since 2026${RESET}
 EOF
 }
 
@@ -910,7 +942,7 @@ cleanup() {
   # Only print goodbye when we actually ran the interactive UI
   if [[ -n "$STTY_SAVE" ]]; then
     echo
-    echo "${DIM}tash out. your secrets are safe. probably.${RESET}"
+    echo "${D}tash out.${RESET} ${MUTED}your secrets are safe. probably.${RESET}"
   fi
 }
 

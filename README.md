@@ -117,7 +117,7 @@ sudo systemctl enable --now triggerhappy
 
 - `bash` (we're not picky, but we have standards)
 - Linux for brightness / Fn keys (macOS HUD still works; backlight hotkeys are a Linux plotline)
-- Unicode block characters (`█` / `░`)
+- Unicode box-drawing for bars (`━` / `─`) and a 256-color terminal (or `TASH_BASIC_COLOR=1`)
 - For Fn keys: read access to `/dev/input/event*` + `python3` (or triggerhappy)
 
 ## Mood guide
