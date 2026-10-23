@@ -20,7 +20,7 @@
 
 - Live system dashboard in the terminal
 - Progress bars that turn yellow when you're in denial, red when you're in trouble
-- **Clock**, **battery** %, **Wi‑Fi** (SSID + signal), ethernet, and online/offline
+- **Clock**, **battery** % + estimated life (time left / to full), **Wi‑Fi** (SSID + signal), ethernet, and online/offline
 - **Brightness + volume** controls (sysfs backlight + ALSA / Pulse / PipeWire)
 - In-dashboard keys *and* real **Fn / media keys** on a bare console (no desktop)
 

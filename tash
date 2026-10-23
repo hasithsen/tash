@@ -308,30 +308,129 @@ get_ip() {
   fi
 }
 
-# prints: pct status   status = Charging|Discharging|Full|Unknown|n/a
+# Humanize seconds → "2h 15m" / "45m" / "n/a"
+format_duration() {
+  local secs="$1"
+  local h m
+  if [[ ! "$secs" =~ ^[0-9]+$ ]] || (( secs <= 0 )); then
+    echo "n/a"
+    return
+  fi
+  # Cap absurd readings (bad sensors / idle power_now)
+  (( secs > 48 * 3600 )) && { echo "n/a"; return; }
+  h=$(( secs / 3600 ))
+  m=$(( (secs % 3600) / 60 ))
+  if (( h > 0 )); then
+    printf "%dh %02dm" "$h" "$m"
+  else
+    printf "%dm" "$m"
+  fi
+}
+
+# Estimate seconds until empty (discharging) or full (charging) from sysfs.
+# prints: seconds kind   kind = empty|full|n/a
+battery_eta_from_sysfs() {
+  local bat="$1" status="$2"
+  local energy_now energy_full power_now
+  local charge_now charge_full current_now
+  local tte ttf secs=0 kind="n/a"
+
+  # Prefer firmware-reported ETAs when present (seconds)
+  if [[ "$status" == "Discharging" && -r "$bat/time_to_empty_now" ]]; then
+    tte="$(cat "$bat/time_to_empty_now" 2>/dev/null || echo 0)"
+    if [[ "$tte" =~ ^[0-9]+$ ]] && (( tte > 0 && tte < 200000 )); then
+      echo "$tte empty"
+      return
+    fi
+  fi
+  if [[ "$status" == "Charging" && -r "$bat/time_to_full_now" ]]; then
+    ttf="$(cat "$bat/time_to_full_now" 2>/dev/null || echo 0)"
+    if [[ "$ttf" =~ ^[0-9]+$ ]] && (( ttf > 0 && ttf < 200000 )); then
+      echo "$ttf full"
+      return
+    fi
+  fi
+
+  # energy_* (µWh) + power_now (µW)
+  if [[ -r "$bat/energy_now" && -r "$bat/power_now" ]]; then
+    energy_now="$(cat "$bat/energy_now")"
+    power_now="$(cat "$bat/power_now")"
+    power_now="${power_now#-}" # some kernels sign by direction
+    if [[ "$power_now" =~ ^[0-9]+$ ]] && (( power_now > 0 )); then
+      if [[ "$status" == "Discharging" ]]; then
+        secs=$(( energy_now * 3600 / power_now ))
+        kind="empty"
+      elif [[ "$status" == "Charging" && -r "$bat/energy_full" ]]; then
+        energy_full="$(cat "$bat/energy_full")"
+        if (( energy_full > energy_now )); then
+          secs=$(( (energy_full - energy_now) * 3600 / power_now ))
+          kind="full"
+        fi
+      fi
+    fi
+  # charge_* (µAh) + current_now (µA)
+  elif [[ -r "$bat/charge_now" && -r "$bat/current_now" ]]; then
+    charge_now="$(cat "$bat/charge_now")"
+    current_now="$(cat "$bat/current_now")"
+    current_now="${current_now#-}"
+    if [[ "$current_now" =~ ^[0-9]+$ ]] && (( current_now > 0 )); then
+      if [[ "$status" == "Discharging" ]]; then
+        secs=$(( charge_now * 3600 / current_now ))
+        kind="empty"
+      elif [[ "$status" == "Charging" && -r "$bat/charge_full" ]]; then
+        charge_full="$(cat "$bat/charge_full")"
+        if (( charge_full > charge_now )); then
+          secs=$(( (charge_full - charge_now) * 3600 / current_now ))
+          kind="full"
+        fi
+      fi
+    fi
+  fi
+
+  if [[ "$kind" != "n/a" ]] && (( secs > 0 )); then
+    echo "$secs $kind"
+  else
+    echo "n/a n/a"
+  fi
+}
+
+# prints: pct status eta_secs eta_kind
+# status = Charging|Discharging|Full|Unknown|n/a
+# eta_kind = empty|full|n/a
 get_battery() {
   if [[ "$OS" == "darwin" ]]; then
-    local line pct status="Unknown"
-    line="$(pmset -g batt 2>/dev/null | grep -E '[0-9]+%')" || { echo "n/a n/a"; return; }
+    local line pct status="Unknown" eta_secs="n/a" eta_kind="n/a" hm
+    line="$(pmset -g batt 2>/dev/null | grep -E '[0-9]+%')" || { echo "n/a n/a n/a n/a"; return; }
     pct="$(grep -oE '[0-9]+%' <<<"$line" | head -1 | tr -d '%')"
     grep -qi charging <<<"$line" && status="Charging"
     grep -qi discharging <<<"$line" && status="Discharging"
     grep -qi charged <<<"$line" && status="Full"
-    echo "${pct:-0} $status"
+    # e.g. "3:42 remaining" or "1:23 until full"
+    if hm="$(grep -oE '[0-9]+:[0-9]+' <<<"$line" | head -1)" && [[ -n "$hm" ]]; then
+      local h="${hm%%:*}" m="${hm##*:}"
+      eta_secs=$(( 10#$h * 3600 + 10#$m * 60 ))
+      if grep -qi 'until full\|charging' <<<"$line" && [[ "$status" == "Charging" ]]; then
+        eta_kind="full"
+      else
+        eta_kind="empty"
+      fi
+    fi
+    echo "${pct:-0} $status $eta_secs $eta_kind"
     return
   fi
-  local bat cap status
+  local bat cap status eta_secs eta_kind
   shopt -s nullglob
   for bat in /sys/class/power_supply/BAT* /sys/class/power_supply/bat*; do
     [[ -r "$bat/capacity" ]] || continue
     cap="$(cat "$bat/capacity")"
     status="$(cat "$bat/status" 2>/dev/null || echo Unknown)"
+    read -r eta_secs eta_kind <<<"$(battery_eta_from_sysfs "$bat" "$status")"
     shopt -u nullglob
-    echo "$cap $status"
+    echo "$cap $status $eta_secs $eta_kind"
     return
   done
   shopt -u nullglob
-  echo "n/a n/a"
+  echo "n/a n/a n/a n/a"
 }
 
 # AC power connected? 1/0/n/a
@@ -592,8 +691,8 @@ handle_key() {
 }
 
 format_battery_line() {
-  local pct="$1" status="$2" ac="$3"
-  local label barbit plug=""
+  local pct="$1" status="$2" ac="$3" eta_secs="${4:-n/a}" eta_kind="${5:-n/a}"
+  local label plug="" life="" life_h
   if [[ "$pct" == "n/a" ]]; then
     echo "${D}no battery (desktop energy)${RESET}"
     return
@@ -608,6 +707,15 @@ format_battery_line() {
   if [[ "$ac" == "1" && "$status" == "Discharging" ]]; then
     plug=" ⚡"
   fi
+  life_h="$(format_duration "$eta_secs")"
+  if [[ "$life_h" != "n/a" ]]; then
+    case "$eta_kind" in
+      empty) life="  ${D}·${RESET}  ${BOLD}${life_h}${RESET} ${D}left${RESET}" ;;
+      full)  life="  ${D}·${RESET}  ${BOLD}${life_h}${RESET} ${D}to full${RESET}" ;;
+    esac
+  elif [[ "$status" == "Full" ]]; then
+    life="  ${D}·${RESET}  ${G}topped up${RESET}"
+  fi
   # invert bar colors: low battery = red
   local color="$G"
   (( pct <= 30 )) && color="$Y"
@@ -619,7 +727,7 @@ format_battery_line() {
   for (( i = 0; i < filled; i++ )); do printf "█"; done
   printf "%s" "$D"
   for (( i = 0; i < empty; i++ )); do printf "░"; done
-  printf "%s  ${BOLD}%s%%%s${RESET}  %s" "$RESET" "$pct" "$plug" "$label"
+  printf "%s  ${BOLD}%s%%%s${RESET}  %s%s" "$RESET" "$pct" "$plug" "$label" "$life"
 }
 
 format_wifi_line() {
@@ -662,7 +770,7 @@ draw() {
   local cpu_pct mem_u mem_t mem_p swap_u swap_t swap_p disk_u disk_t disk_p
   local load cores model host up kernel ip procs users
   local clock_hms clock_date clock_tz
-  local bat_p bat_s ac_on wifi_st wifi_ssid wifi_sig eth_st eth_if eth_ip net_conn
+  local bat_p bat_s bat_eta bat_eta_kind ac_on wifi_st wifi_ssid wifi_sig eth_st eth_if eth_ip net_conn
   local bright_p vol_p vol_m controls_block flash_line
   local bat_line wifi_line eth_line conn_label
 
@@ -684,7 +792,7 @@ draw() {
   clock_date="$(date '+%a %Y-%m-%d')"
   clock_tz="$(get_timezone)"
 
-  read -r bat_p bat_s <<<"$(get_battery)"
+  read -r bat_p bat_s bat_eta bat_eta_kind <<<"$(get_battery)"
   ac_on="$(get_ac_online)"
   read -r wifi_st wifi_ssid wifi_sig <<<"$(get_wifi)"
   read -r eth_st eth_if eth_ip <<<"$(get_ethernet)"
@@ -693,7 +801,7 @@ draw() {
   bright_p="$(get_brightness_pct)"
   read -r vol_p vol_m <<<"$(get_volume_state)"
 
-  bat_line="$(format_battery_line "$bat_p" "$bat_s" "$ac_on")"
+  bat_line="$(format_battery_line "$bat_p" "$bat_s" "$ac_on" "$bat_eta" "$bat_eta_kind")"
   wifi_line="$(format_wifi_line "$wifi_st" "$wifi_ssid" "$wifi_sig")"
   eth_line="$(format_eth_line "$eth_st" "$eth_if" "$eth_ip")"
 
