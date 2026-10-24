@@ -2,6 +2,8 @@
 
 **T**erminal **A**wesome **S**ystem **H**UD
 
+![tash screenshot](media/tash.png)
+
 > Using `tash` makes you awesome.  
 > Not because the bars are teal — though they are — but because you finally know what your laptop is doing.  
 > Clarity looks like confidence. Confidence looks like awesome.  
