@@ -35,7 +35,7 @@ The screen cleared. Teal settled in. Bars drew themselves. Mood: *mildly concern
 
 Your friend smiled the small smile of someone whose work here was done.
 
-You were not famous. You were not fluent in French.  
+You were not famous. You were not fluent in Japanese.  
 You were **awesome** — the soft kind, the kind that refreshes instead of reboots.
 
 Weeks later, you will stand in someone else’s doorway and say the same line.  
