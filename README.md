@@ -2,8 +2,6 @@
 
 **T**erminal **A**wesome **S**ystem **H**UD
 
-![tash screenshot](media/tash.png)
-
 > Using `tash` makes you awesome.  
 > Your friends may not understand why.  
 > Show them the mood line. Or don’t. Mystery is free.
@@ -159,6 +157,8 @@ Join `video`, reload udev, log in again.
 
 **Vs `htop`?**  
 `htop` counts processes. `tash` is the overview — battery, network, backlight — and you looking like you meant to open the laptop.
+
+![tash screenshot](media/tash.png)
 
 ## License
 
