@@ -1,17 +1,18 @@
 [Unit]
 Description=tash Fn/media key daemon (brightness + volume, no DE)
-After=systemd-udev-settle.service sound.target
-Wants=sound.target
+Documentation=file:///usr/local/bin/tash-hotkeys
+After=multi-user.target systemd-udevd.service systemd-logind.service
+Wants=systemd-udevd.service
 
 [Service]
 Type=simple
-User=@USER@
-Group=input
-SupplementaryGroups=video audio
+# Root can open every event node (Dell WMI often appears late / strict perms).
+# tash-ctl brightness/volume work fine as root on Debian minimal.
+ExecStartPre=-/sbin/modprobe dell_wmi
+ExecStartPre=-/sbin/modprobe dell_laptop
 ExecStart=/usr/local/bin/tash-hotkeys
-Restart=on-failure
+Restart=always
 RestartSec=2
-# Don't grab devices exclusively — share with the console
 Nice=5
 
 [Install]

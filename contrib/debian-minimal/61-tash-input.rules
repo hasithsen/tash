@@ -1,0 +1,5 @@
+# Ensure Fn / Dell WMI hotkey event nodes are group-readable (input).
+# Restart tash-hotkeys when a Dell WMI device appears late at boot.
+KERNEL=="event*", SUBSYSTEM=="input", ATTRS{name}=="Dell WMI hotkeys", GROUP="input", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="tash-hotkeys.service"
+KERNEL=="event*", SUBSYSTEM=="input", ATTRS{name}=="Dell WMI hotkeys", RUN+="/bin/systemctl try-restart tash-hotkeys.service"
+KERNEL=="event*", SUBSYSTEM=="input", ATTRS{name}=="*Video Bus*", GROUP="input", MODE="0660"
